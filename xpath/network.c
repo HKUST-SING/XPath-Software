@@ -71,32 +71,22 @@ bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
 bool xpath_ipip_encap(struct sk_buff *skb, struct iphdr *tiph, const struct net_device *out)
 {
     struct iphdr *iph = ip_hdr(skb);
-    unsigned int max_headroom = sizeof(struct iphdr) + LL_RESERVED_SPACE(out);
-    unsigned int len_to_expand;
+    unsigned int max_headroom = sizeof(struct iphdr) + LL_RESERVED_SPACE(out);  /* The extra header space needed */
 
     /* if we don't have enough headroom */
     if (skb_headroom(skb) < max_headroom)
     {
-        len_to_expand = max_headroom - skb_headroom(skb);
-		/* expand reallocate headroom for sk_buff */
-		if (unlikely(pskb_expand_head(skb, len_to_expand,  0,  GFP_ATOMIC)))
-		{
-			printk(KERN_INFO "Unable to expand sk_buff\n");
-			return false;
-		}
+        if (unlikely(skb_cow_head(skb, max_headroom - skb_headroom(skb))))
+        {
+            printk(KERN_INFO "Unable to expand sk_buff\n");
+            return false;
+        }
     }
 
     skb = iptunnel_handle_offloads(skb, false, SKB_GSO_IPIP);
     /* push down and install the outer IP header */
     skb_push(skb, sizeof(struct iphdr));
     skb_reset_network_header(skb);
-
-    /* I am not sure whether skb_make_writable is necessary */
-    if (unlikely(!skb_make_writable(skb, sizeof(struct iphdr))))
-    {
-        printk(KERN_INFO "Not writable\n");
-        return false;
-    }
 
     /* construct the outer IP header */
     iph = (struct iphdr *)skb_network_header(skb);

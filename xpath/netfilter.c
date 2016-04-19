@@ -11,7 +11,7 @@
 #include "network.h"
 
 /* Flow Table */
-//extern struct XPath_Flow_Table ft;
+extern struct XPath_Flow_Table ft;
 /* NIC device name */
 extern char *param_dev;
 /* TCP port */
@@ -26,8 +26,11 @@ static struct nf_hook_ops xpath_nf_hook_in;
 static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
     struct iphdr *iph = ip_hdr(skb);
-    struct iphdr tiph;
+    struct iphdr tiph;  /* tunnel (outer) IP header */
     struct tcphdr *tcph;
+    u16 payload_len = 0;    /* TCP payload length */
+    struct XPath_Flow f;
+    struct XPath_Flow *ptr = NULL;
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -39,13 +42,44 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         if (param_port != 0 && ntohs(tcph->source) != param_port && ntohs(tcph->dest) != param_port)
             return NF_ACCEPT;
 
-        /* modify MSS for TCP SYN packets */
+        XPath_Init_Flow(&f);
+        f.local_ip = iph->saddr;
+        f.remote_ip = iph->daddr;
+        f.local_port = (u16)ntohs(tcph->source);
+        f.remote_port = (u16)ntohs(tcph->dest);
+
         if (tcph->syn)
         {
+            /* modify MSS for TCP SYN packets */
             if (unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr))))
             {
                 printk(KERN_INFO "Cannot modify TCP MSS\n");
                 return NF_DROP;
+            }
+
+            /* insert a new flow entry to the flow table */
+            if (unlikely(!XPath_Insert_Table(&ft, &f, GFP_ATOMIC)))
+                printk(KERN_INFO "XPath: insert fails\n");
+            /*else
+                printk(KERN_INFO "XPath: insert succeeds\n");*/
+        }
+        else if (tcph->fin || tcph->rst)
+        {
+            if (!XPath_Delete_Table(&ft, &f))
+                printk(KERN_INFO "XPath: delete fails\n");
+            /*else
+                printk(KERN_INFO "XPath: delete succeeds\n");*/
+        }
+        else
+        {
+            payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
+            ptr = XPath_Search_Table(&ft, &f);
+            if (ptr)
+            {
+                if (atomic_read(&(ptr->info.byte_count)) + (int)payload_len > 65535)
+                    atomic_set(&(ptr->info.byte_count), (int)payload_len);
+                else
+                    atomic_add((int)payload_len, &(ptr->info.byte_count));
             }
         }
 

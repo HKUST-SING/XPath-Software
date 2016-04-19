@@ -25,19 +25,15 @@ static struct nf_hook_ops xpath_nf_hook_in;
 /* Hook function for outgoing packets */
 static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
-    struct iphdr *iph;
+    struct iphdr *iph = ip_hdr(skb);
     struct iphdr tiph;
     struct tcphdr *tcph;
 
-    if (unlikely(!out))
-        return NF_ACCEPT;
-
-    if (param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
+    if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
 
     /* we only filter TCP packets */
-    iph = ip_hdr(skb);
-    if (iph && iph->protocol == IPPROTO_TCP)
+    if (likely(iph) && iph->protocol == IPPROTO_TCP)
     {
         tcph = tcp_hdr(skb);
         if (param_port != 0 && ntohs(tcph->source) != param_port && ntohs(tcph->dest) != param_port)
@@ -83,7 +79,10 @@ static unsigned int xpath_hook_func_in(unsigned int hooknum, struct sk_buff *skb
 {
     struct iphdr *iph = ip_hdr(skb);
 
-    if (iph && iph->protocol == IPPROTO_IPIP)
+    if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
+        return NF_ACCEPT;
+
+    if (likely(iph) && iph->protocol == IPPROTO_IPIP)
     {
         if (unlikely(!xpath_ipip_decap(skb)))
             printk(KERN_INFO "Cannot remove outer IP header\n");

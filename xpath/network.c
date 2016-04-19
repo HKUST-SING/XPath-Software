@@ -10,33 +10,21 @@
  */
 bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
 {
-    struct iphdr *iph;  //IP header
-    struct tcphdr *tcph;    //TCP header
-    unsigned int tcp_len;   //TCP packet length
-    unsigned int tcph_len;  //TCP header length
-    unsigned char *ptr = NULL;
+    struct iphdr *iph = ip_hdr(skb);    //IP header
+    struct tcphdr *tcph = tcp_hdr(skb); //TCP header
+    unsigned int tcp_len = skb->len - (iph->ihl<<2);    //TCP packet length
+    unsigned int tcph_len = (unsigned int)(tcph->doff<<2);  //TCP header length
+    unsigned char *ptr = (unsigned char*)tcph + sizeof(struct tcphdr);
     unsigned short int mss; //Maximum segment size (MSS)
     unsigned int offset;    //length of the TCP option
     bool result = false;
 
-    if (unlikely(!skb))
+    if (unlikely(!tcph->syn))
         return result;
 
-    iph = ip_hdr(skb);
-	tcph = tcp_hdr(skb);
-	if (unlikely(!iph || !tcph))
-		return result;
-
-	/* not a TCP SYN packet */
-	if (unlikely(!(tcph->syn)))
-		return result;
-
 	/* if we can not modify this packet */
-	if (unlikely(skb_linearize(skb)!= 0))
+	if (unlikely(skb_linearize(skb) != 0))
 		return result;
-
-	tcph_len = (unsigned int)(tcph->doff<<2);
-	ptr = (unsigned char*)tcph + sizeof(struct tcphdr);
 
 	while (1)
 	{
@@ -66,7 +54,6 @@ bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
 
     if (likely(result))
 	{
-        tcp_len = skb->len - (iph->ihl<<2);
         tcph->check = 0;
         tcph->check = csum_tcpudp_magic(iph->saddr, iph->daddr, tcp_len, iph->protocol, csum_partial((char *)tcph, tcp_len, 0));
         skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -83,27 +70,16 @@ bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
  */
 bool xpath_ipip_encap(struct sk_buff *skb, struct iphdr *tiph, const struct net_device *out)
 {
-    struct iphdr  *iph = NULL;
-    unsigned int max_headroom;
+    struct iphdr *iph = ip_hdr(skb);
+    unsigned int max_headroom = sizeof(struct iphdr) + LL_RESERVED_SPACE(out);
     unsigned int len_to_expand;
-    unsigned short original_tot_len;    //total length of original IP packet
-
-    if (unlikely(!skb || !tiph || !out))
-        return false;
-
-    iph = ip_hdr(skb);
-    if (unlikely(!iph))
-        return false;
-
-    original_tot_len = ntohs(iph->tot_len);
-    max_headroom = sizeof(struct iphdr) + LL_RESERVED_SPACE(out);
 
     /* if we don't have enough headroom */
     if (skb_headroom(skb) < max_headroom)
     {
         len_to_expand = max_headroom - skb_headroom(skb);
 		/* expand reallocate headroom for sk_buff */
-		if (pskb_expand_head(skb, len_to_expand,  0,  GFP_ATOMIC))
+		if (unlikely(pskb_expand_head(skb, len_to_expand,  0,  GFP_ATOMIC)))
 		{
 			printk(KERN_INFO "Unable to expand sk_buff\n");
 			return false;
@@ -116,7 +92,7 @@ bool xpath_ipip_encap(struct sk_buff *skb, struct iphdr *tiph, const struct net_
     skb_reset_network_header(skb);
 
     /* I am not sure whether skb_make_writable is necessary */
-    if (!skb_make_writable(skb, sizeof(struct iphdr)))
+    if (unlikely(!skb_make_writable(skb, sizeof(struct iphdr))))
     {
         printk(KERN_INFO "Not writable\n");
         return false;
@@ -125,19 +101,16 @@ bool xpath_ipip_encap(struct sk_buff *skb, struct iphdr *tiph, const struct net_
     /* construct the outer IP header */
     iph = (struct iphdr *)skb_network_header(skb);
     *iph = *tiph;
+
     return true;
 }
 
 /* IPIP decapsulation. Return true if it succeeds */
 bool xpath_ipip_decap(struct sk_buff *skb)
 {
-    struct iphdr *iph = NULL;
+    struct iphdr *iph = ip_hdr(skb);
     u8 out_tos;
 
-    if (unlikely(!skb))
-        return false;
-
-    iph = ip_hdr(skb);
     /* We only decap IPIP packets */
     if (likely(iph && iph->protocol == IPPROTO_IPIP))
     {
@@ -148,9 +121,6 @@ bool xpath_ipip_decap(struct sk_buff *skb)
 
         /* Get the inner IP header */
         iph = ip_hdr(skb);
-        if (unlikely(!iph))
-            return false;
-
         /* We should update ToS of the inner IP header when
            the outer IP header has a different ToS (get ECN marked ). */
         if (out_tos != iph->tos)
@@ -160,7 +130,7 @@ bool xpath_ipip_decap(struct sk_buff *skb)
             iph->check = 0;
             iph->check = ip_fast_csum(iph, iph->ihl);
         }
-        
+
         return true;
     }
     else

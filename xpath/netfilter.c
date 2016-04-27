@@ -11,7 +11,7 @@
 #include "network.h"
 
 /* Flow Table */
-extern struct XPath_Flow_Table ft;
+extern struct xpath_flow_table ft;
 /* NIC device name */
 extern char *param_dev;
 /* TCP port */
@@ -29,8 +29,8 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
     struct iphdr tiph;  /* tunnel (outer) IP header */
     struct tcphdr *tcph;
     u16 payload_len = 0;    /* TCP payload length */
-    struct XPath_Flow f;
-    struct XPath_Flow *ptr = NULL;
+    struct xpath_flow_entry f;
+    struct xpath_flow_entry *ptr = NULL;
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -42,7 +42,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         if (param_port != 0 && ntohs(tcph->source) != param_port && ntohs(tcph->dest) != param_port)
             return NF_ACCEPT;
 
-        XPath_Init_Flow(&f);
+        xpath_init_flow_entry(&f);
         f.local_ip = iph->saddr;
         f.remote_ip = iph->daddr;
         f.local_port = (u16)ntohs(tcph->source);
@@ -58,14 +58,14 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
             }
 
             /* insert a new flow entry to the flow table */
-            if (unlikely(!XPath_Insert_Table(&ft, &f, GFP_ATOMIC)))
+            if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
                 printk(KERN_INFO "XPath: insert fails\n");
             /*else
                 printk(KERN_INFO "XPath: insert succeeds\n");*/
         }
         else if (tcph->fin || tcph->rst)
         {
-            if (!XPath_Delete_Table(&ft, &f))
+            if (!xpath_delete_flow_table(&ft, &f))
                 printk(KERN_INFO "XPath: delete fails\n");
             /*else
                 printk(KERN_INFO "XPath: delete succeeds\n");*/
@@ -73,7 +73,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         else
         {
             payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
-            ptr = XPath_Search_Table(&ft, &f);
+            ptr = xpath_search_flow_table(&ft, &f);
             if (ptr)
             {
                 if (atomic_read(&(ptr->info.byte_count)) + (int)payload_len > 65535)
@@ -126,7 +126,7 @@ static unsigned int xpath_hook_func_in(unsigned int hooknum, struct sk_buff *skb
 }
 
 /* Install Netfilter hooks. Return true if it succeeds */
-bool XPath_Netfilter_Init(void)
+bool xpath_netfilter_init(void)
 {
     /* register outgoing Netfilter hook */
     xpath_nf_hook_out.hook = xpath_hook_func_out;
@@ -156,7 +156,7 @@ bool XPath_Netfilter_Init(void)
 }
 
 /* Uninstall Netfilter hooks */
-void XPath_Netfilter_Exit(void)
+void xpath_netfilter_exit(void)
 {
     nf_unregister_hook(&xpath_nf_hook_out);
     nf_unregister_hook(&xpath_nf_hook_in);

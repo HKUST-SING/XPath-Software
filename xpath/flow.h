@@ -5,28 +5,28 @@
 #include <linux/ktime.h>
 #include <linux/list.h>
 
-/* Hash range (Number of flow lists) */
-#define XPath_HASH_RANGE 256
+/* Hash range for XPath flow table (Number of flow lists) */
+#define XPATH_FLOW_HASH_RANGE 256
 
-struct XPath_Flow_Info
+struct xpath_flow_info
 {
     atomic_t path_id;   //current path ID
     atomic_t byte_count;    //Presto
 };
 
 /* A TCP flow is defined by 4-tuple <local_ip, remote_ip, local_port, remote_port> and its related information */
-struct XPath_Flow
+struct xpath_flow_entry
 {
     u32 local_ip;   //Local IP address
     u32 remote_ip;  //Remote IP address
     u16 local_port; //Local port
     u16 remote_port;    //Remote port
-    struct XPath_Flow_Info info; //Information for this flow
+    struct xpath_flow_info info; //Information for this flow
     struct list_head list;	//linked list
 };
 
 /* Link List of Flows */
-struct XPath_Flow_List
+struct xpath_flow_list
 {
     struct list_head head_node;    //head node of the flow list
     unsigned int len;   //total number of flows in the list
@@ -34,43 +34,43 @@ struct XPath_Flow_List
 };
 
 /* Hash Table of Flows */
-struct XPath_Flow_Table
+struct xpath_flow_table
 {
-    struct XPath_Flow_List* flow_lists;  //array of linked lists to store per-flow information
+    struct xpath_flow_list *flow_lists;  //array of linked lists to store per-flow information
     atomic_t size;
 };
 
 /* Print functions */
-void XPath_Print_Flow(struct XPath_Flow* f, char* operation);
-void XPath_Print_List(struct XPath_Flow_List* fl);
-void XPath_Print_Table(struct XPath_Flow_Table* ft);
+void xpath_print_flow_entry(struct xpath_flow_entry *f, char *operation);
+void xpath_print_flow_list(struct xpath_flow_list *fl);
+void xpath_print_flow_table(struct xpath_flow_table *ft);
 
-inline unsigned int XPath_Hash_Flow(struct XPath_Flow* f);
-inline bool XPath_Equal_Flow(struct XPath_Flow* f1, struct XPath_Flow* f2);
+inline unsigned int xpath_hash_flow(struct xpath_flow_entry *f);
+inline bool xpath_equal_flow(struct xpath_flow_entry *f1, struct xpath_flow_entry *f2);
 
 /* Initialization functions */
-bool XPath_Init_Info(struct XPath_Flow_Info* info);
-bool XPath_Init_Flow(struct XPath_Flow* f);
-bool XPath_Init_List(struct XPath_Flow_List* fl);
-bool XPath_Init_Table(struct XPath_Flow_Table* ft);
+bool xpath_init_flow_info(struct xpath_flow_info *info);
+bool xpath_init_flow_entry(struct xpath_flow_entry *f);
+bool xpath_init_flow_list(struct xpath_flow_list *fl);
+bool xpath_init_flow_table(struct xpath_flow_table *ft);
 
 /* Search functions: search a flow entry from flow table/list */
-struct XPath_Flow* XPath_Search_List(struct XPath_Flow_List* fl, struct XPath_Flow* f);
-struct XPath_Flow* XPath_Search_Table(struct XPath_Flow_Table* ft, struct XPath_Flow* f);
+struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f);
+struct xpath_flow_entry *xpath_search_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entry *f);
 
 /* Insert functions: insert a new flow entry to flow table/list */
-bool XPath_Insert_List(struct XPath_Flow_List* fl, struct XPath_Flow* f, int flags);
-bool XPath_Insert_Table(struct XPath_Flow_Table* ft,struct XPath_Flow* f, int flags);
+bool xpath_insert_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f, int flags);
+bool xpath_insert_flow_table(struct xpath_flow_table *ft,struct xpath_flow_entry *f, int flags);
 
 /* Delete functions: delete a flow entry from flow table/list */
-bool XPath_Delete_List(struct XPath_Flow_List* fl, struct XPath_Flow* f);
-bool XPath_Delete_Table(struct XPath_Flow_Table* ft, struct XPath_Flow* f);
+bool xpath_delete_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f);
+bool xpath_delete_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entry *f);
 
 /* Clear functions: clear flow entries from flow table/list */
-bool XPath_Clear_List(struct XPath_Flow_List* fl);
-bool XPath_Clear_Table(struct XPath_Flow_Table* ft);
+bool xpath_clear_flow_list(struct xpath_flow_list *fl);
+bool xpath_clear_flow_table(struct xpath_flow_table *ft);
 
 /* Exit functions: delete whole flow table */
-bool XPath_Exit_Table(struct XPath_Flow_Table* ft);
+bool xpath_exit_flow_table(struct xpath_flow_table *ft);
 
 #endif

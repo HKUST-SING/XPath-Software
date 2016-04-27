@@ -14,7 +14,7 @@ MODULE_PARM_DESC(param_port, "TCP port to match (0=all)");
 module_param(param_port, int, 0);
 
 /* Flow Table */
-struct XPath_Flow_Table ft;
+struct xpath_flow_table ft;
 
 static int xpath_module_init(void)
 {
@@ -35,9 +35,9 @@ static int xpath_module_init(void)
     }
 
     /* Initialize flow table */
-    XPath_Init_Table(&ft);
+    xpath_init_flow_table(&ft);
 
-    if (likely(XPath_Netfilter_Init()))
+    if (likely(xpath_netfilter_init()))
     {
         printk(KERN_INFO "XPath: start on %s (TCP port %d)\n", param_dev? param_dev:"any interface", param_port);
         return 0;
@@ -48,8 +48,8 @@ static int xpath_module_init(void)
 
 static void xpath_module_exit(void)
 {
-	XPath_Netfilter_Exit();
-    XPath_Exit_Table(&ft);
+	xpath_netfilter_exit();
+    xpath_exit_flow_table(&ft);
 
     printk(KERN_INFO "XPath: stop working\n");
 }

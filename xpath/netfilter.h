@@ -2,9 +2,9 @@
 #define NETFILTER_H
 
 /* Install Netfilter hooks */
-bool XPath_Netfilter_Init(void);
+bool xpath_netfilter_init(void);
 
 /* Uninstall Netfilter hooks */
-void XPath_Netfilter_Exit(void);
+void xpath_netfilter_exit(void);
 
 #endif

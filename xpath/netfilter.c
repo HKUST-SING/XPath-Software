@@ -7,11 +7,13 @@
 #include <linux/netfilter_ipv4.h>
 
 #include "netfilter.h"
-#include "flow.h"
-#include "network.h"
+#include "flow_table.h"
+#include "net_util.h"
 
 /* Flow Table */
 extern struct xpath_flow_table ft;
+/* Path Table */
+extern struct xpath_path_table pt;
 /* NIC device name */
 extern char *param_dev;
 /* TCP port */
@@ -53,20 +55,20 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
             /* modify MSS for TCP SYN packets */
             if (unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr))))
             {
-                printk(KERN_INFO "Cannot modify TCP MSS\n");
+                printk(KERN_INFO "XPath: cannot modify TCP MSS\n");
                 return NF_DROP;
             }
 
             /* insert a new flow entry to the flow table */
             if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
-                printk(KERN_INFO "XPath: insert fails\n");
+                printk(KERN_INFO "XPath: insert flow fails\n");
             /*else
                 printk(KERN_INFO "XPath: insert succeeds\n");*/
         }
         else if (tcph->fin || tcph->rst)
         {
             if (!xpath_delete_flow_table(&ft, &f))
-                printk(KERN_INFO "XPath: delete fails\n");
+                printk(KERN_INFO "XPath: delete flow fails\n");
             /*else
                 printk(KERN_INFO "XPath: delete succeeds\n");*/
         }
@@ -100,7 +102,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         /* add tunnel (outer) IP header */
         if (unlikely(!xpath_ipip_encap(skb, &tiph, out)))
         {
-            printk(KERN_INFO "Cannot add outer IP header\n");
+            printk(KERN_INFO "XPath: cannot add outer IP header\n");
             return NF_DROP;
         }
     }
@@ -119,7 +121,7 @@ static unsigned int xpath_hook_func_in(unsigned int hooknum, struct sk_buff *skb
     if (likely(iph) && iph->protocol == IPPROTO_IPIP)
     {
         if (unlikely(!xpath_ipip_decap(skb)))
-            printk(KERN_INFO "Cannot remove outer IP header\n");
+            printk(KERN_INFO "XPath: cannot remove outer IP header\n");
     }
 
     return NF_ACCEPT;
@@ -136,7 +138,7 @@ bool xpath_netfilter_init(void)
 
     if (unlikely(nf_register_hook(&xpath_nf_hook_out)))
     {
-        printk(KERN_INFO "Cannot register Netfilter hook at NF_INET_POST_ROUTING\n");
+        printk(KERN_INFO "XPath: cannot register Netfilter hook at NF_INET_POST_ROUTING\n");
         return false;
     }
 
@@ -148,7 +150,7 @@ bool xpath_netfilter_init(void)
 
     if (unlikely(nf_register_hook(&xpath_nf_hook_in)))
     {
-        printk(KERN_INFO "Cannot register Netfilter hook at NF_INET_PRE_ROUTING\n");
+        printk(KERN_INFO "XPath: cannot register Netfilter hook at NF_INET_PRE_ROUTING\n");
         return false;
     }
 

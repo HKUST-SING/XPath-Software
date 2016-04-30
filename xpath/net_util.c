@@ -1,4 +1,4 @@
-#include "network.h"
+#include "net_util.h"
 
 #include <linux/tcp.h>
 #include <net/ip_tunnels.h>

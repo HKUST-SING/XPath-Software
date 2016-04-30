@@ -1,5 +1,5 @@
-#ifndef __FLOW_H__
-#define __FLOW_H__
+#ifndef __FLOW_TABLE_H__
+#define __FLOW_TABLE_H__
 
 #include <linux/types.h>
 #include <linux/ktime.h>

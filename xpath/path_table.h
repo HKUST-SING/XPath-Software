@@ -1,5 +1,5 @@
-#ifndef __PATH_H__
-#define __PATH_H__
+#ifndef __PATH_TABLE_H__
+#define __PATH_TABLE_H__
 
 #include <linux/types.h>
 #include <linux/list.h>
@@ -35,5 +35,8 @@ bool xpath_clear_path_table(struct xpath_path_table *pt);
 
 /* Exit XPath path table. Release all resrouces. */
 bool xpath_exit_path_table(struct xpath_path_table *pt);
+
+/* print information of all entries in XPath path table */
+bool xpath_print_path_table(struct xpath_path_table *pt);
 
 #endif

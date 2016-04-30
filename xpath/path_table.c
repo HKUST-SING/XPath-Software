@@ -2,11 +2,14 @@
 #include <linux/slab.h>
 #include <asm/atomic.h>
 
-#include "path.h"
+#include "path_table.h"
 
 
 /* Calculate hash code for destination address */
 static unsigned int xpath_daddr_hash_code(unsigned int daddr);
+
+/* print information of a XPath entry */
+void xpath_print_path_entry(struct xpath_path_entry *entry);
 
 /* Initialize XPath path table */
 bool xpath_init_path_table(struct xpath_path_table* pt)
@@ -31,8 +34,6 @@ bool xpath_init_path_table(struct xpath_path_table* pt)
     }
     else
     {
-        /* vfree can handle NULL pointer */
-        vfree(buf);
         printk(KERN_INFO "xpath_init_path_table: vmalloc error\n");
         return false;
     }
@@ -105,6 +106,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt, unsigned int daddr, un
                 old_congestions = entry->congestions;
                 entry->paths = new_paths;
                 entry->congestions = new_congestions;
+                entry->num_paths = num_paths;
                 vfree(old_paths);
                 vfree(old_congestions);
 
@@ -138,6 +140,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt, unsigned int daddr, un
         entry->daddr = daddr;
         entry->paths = new_paths;
         entry->congestions = new_congestions;
+        entry->num_paths = num_paths;
         hlist_add_head(&entry->hlist, &pt->lists[index]);
 
         return true;
@@ -176,6 +179,48 @@ bool xpath_exit_path_table(struct xpath_path_table *pt)
     xpath_clear_path_table(pt);
     vfree(pt->lists);
     return true;
+}
+
+/* print information of all entries in XPath path table */
+bool xpath_print_path_table(struct xpath_path_table *pt)
+{
+    unsigned int i;
+    struct xpath_path_entry *entry = NULL;
+    struct hlist_node *ptr = NULL;
+
+    if (unlikely(!pt))
+        return false;
+
+    for (i = 0; i < XPATH_PATH_HASH_RANGE; i++)
+    {
+        if (unlikely(!&pt->lists[i]) || hlist_empty(&pt->lists[i]))
+            continue;
+
+        hlist_for_each_entry_safe(entry, ptr, &pt->lists[i], hlist)
+            xpath_print_path_entry(entry);
+    }
+
+    return true;
+}
+
+/* print information of a XPath entry */
+void xpath_print_path_entry(struct xpath_path_entry *entry)
+{
+    unsigned int i;
+    char ip[16] = {0};
+
+    if (unlikely(!entry || entry->num_paths == 0))
+        return;
+
+	snprintf(ip, 16, "%pI4", &(entry->daddr));
+    printk(KERN_INFO "Dest %s (%u paths): ", ip, entry->num_paths);
+
+    for (i = 0; i < entry->num_paths; i++)
+    {
+        snprintf(ip, 16, "%pI4", &(entry->paths[i]));
+        printk(KERN_INFO "%s (%d) ", ip, atomic_read(&(entry->congestions[i])));
+    }
+    printk(KERN_INFO "\n");
 }
 
 /* Calculate hash code for destination address */

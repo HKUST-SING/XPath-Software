@@ -1,5 +1,5 @@
-#ifndef __NETWORK_H__
-#define __NETWORK_H__
+#ifndef __NET_UTIL_H__
+#define __NET_UTIL_H__
 
 #include <linux/skbuff.h>
 #include <linux/types.h>

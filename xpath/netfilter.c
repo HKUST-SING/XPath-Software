@@ -8,6 +8,7 @@
 
 #include "netfilter.h"
 #include "flow_table.h"
+#include "path_table.h"
 #include "net_util.h"
 
 /* Flow Table */
@@ -32,7 +33,10 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
     struct tcphdr *tcph;
     u16 payload_len = 0;    /* TCP payload length */
     struct xpath_flow_entry f;
-    struct xpath_flow_entry *ptr = NULL;
+    struct xpath_flow_entry *flow_ptr = NULL;
+    struct xpath_path_entry *path_ptr = NULL;
+    u32 path_ip = 0;    /* IP address of the path */
+    int path_id = 0;
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -75,14 +79,35 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         else
         {
             payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
-            ptr = xpath_search_flow_table(&ft, &f);
-            if (ptr)
+            flow_ptr = xpath_search_flow_table(&ft, &f);
+            if (flow_ptr)
             {
-                if (atomic_read(&(ptr->info.byte_count)) + (int)payload_len > 65535)
-                    atomic_set(&(ptr->info.byte_count), (int)payload_len);
+                if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
+                    atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
                 else
-                    atomic_add((int)payload_len, &(ptr->info.byte_count));
+                    atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
             }
+        }
+
+        path_ptr = xpath_search_path_table(&pt, iph->daddr);
+        /* cannot find path information */
+        if (unlikely(!path_ptr || path_ptr->num_paths == 0))
+        {
+            path_ip = iph->daddr;
+            printk(KERN_INFO "XPath: cannot find path information\n");
+        }
+        /* perform per-packet load balancing */
+        else if (flow_ptr)
+        {
+            path_id = atomic_read(&(flow_ptr->info.path_id));
+            path_id = (path_id + 1) % path_ptr->num_paths;
+            atomic_set(&(flow_ptr->info.path_id), path_id);
+            path_ip = path_ptr->paths[path_id];
+        }
+        /* use the first path by default */
+        else
+        {
+            path_ip = path_ptr->paths[0];
         }
 
         /* construct tunnel (outer) IP header */
@@ -93,7 +118,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
         tiph.frag_off = iph->frag_off;
         tiph.protocol = IPPROTO_IPIP;
         tiph.tos = iph->tos;
-        tiph.daddr = iph->daddr;
+        tiph.daddr = path_ip;
         tiph.saddr = iph->saddr;
         tiph.ttl = iph->ttl;
         tiph.check = 0;

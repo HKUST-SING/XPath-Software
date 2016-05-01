@@ -7,7 +7,7 @@
 #include "path_table.h"
 
 /* param_dev: NIC to operate XPath */
-char *param_dev = "eth1";
+char *param_dev = NULL;
 MODULE_PARM_DESC(param_dev, "Interface to operate XPath (NULL=all)");
 module_param(param_dev, charp, 0);
 

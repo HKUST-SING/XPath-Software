@@ -196,6 +196,7 @@ bool xpath_print_path_table(struct xpath_path_table *pt)
         if (unlikely(!&pt->lists[i]) || hlist_empty(&pt->lists[i]))
             continue;
 
+        printk(KERN_INFO "Path List %u\n", i);
         hlist_for_each_entry_safe(entry, ptr, &pt->lists[i], hlist)
             xpath_print_path_entry(entry);
     }
@@ -213,14 +214,13 @@ void xpath_print_path_entry(struct xpath_path_entry *entry)
         return;
 
 	snprintf(ip, 16, "%pI4", &(entry->daddr));
-    printk(KERN_INFO "Dest %s (%u paths): ", ip, entry->num_paths);
+    printk(KERN_INFO "  Dest %s (%u paths): \n", ip, entry->num_paths);
 
     for (i = 0; i < entry->num_paths; i++)
     {
         snprintf(ip, 16, "%pI4", &(entry->paths[i]));
-        printk(KERN_INFO "%s (%d) ", ip, atomic_read(&(entry->congestions[i])));
+        printk(KERN_INFO "      %s (%d) \n", ip, atomic_read(&(entry->congestions[i])));
     }
-    printk(KERN_INFO "\n");
 }
 
 /* Calculate hash code for destination address */

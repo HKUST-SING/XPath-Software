@@ -3,7 +3,7 @@
 #include <asm/atomic.h>
 
 #include "path_table.h"
-
+#include "params.h"
 
 /* Calculate hash code for destination address */
 static unsigned int xpath_daddr_hash_code(unsigned int daddr);

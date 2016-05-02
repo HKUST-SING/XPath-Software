@@ -3,6 +3,7 @@
 #include <asm/atomic.h>
 
 #include "flow_table.h"
+#include "params.h"
 
 /* Print a flow information. Operation: "Add", "Delete", etc.*/
 void xpath_print_flow_entry(struct xpath_flow_entry *f, char *operation)

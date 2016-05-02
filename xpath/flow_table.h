@@ -5,9 +5,6 @@
 #include <linux/ktime.h>
 #include <linux/list.h>
 
-/* Hash range for XPath flow table (Number of flow lists) */
-#define XPATH_FLOW_HASH_RANGE 256
-
 struct xpath_flow_info
 {
     atomic_t path_id;   //current path ID

@@ -4,9 +4,6 @@
 #include <linux/types.h>
 #include <linux/list.h>
 
-/* Hash range for XPath path table */
-#define XPATH_PATH_HASH_RANGE 256
-
 struct xpath_path_entry
 {
     struct hlist_node hlist;

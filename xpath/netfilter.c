@@ -10,6 +10,7 @@
 #include "flow_table.h"
 #include "path_table.h"
 #include "net_util.h"
+#include "params.h"
 
 /* Flow Table */
 extern struct xpath_flow_table ft;
@@ -26,7 +27,7 @@ static struct nf_hook_ops xpath_nf_hook_out;
 static struct nf_hook_ops xpath_nf_hook_in;
 
 /* Hook function for outgoing packets */
-static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
     struct iphdr *iph = ip_hdr(skb);
     struct iphdr tiph;  /* tunnel (outer) IP header */
@@ -37,6 +38,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
     struct xpath_path_entry *path_ptr = NULL;
     u32 path_ip = 0;    /* IP address of the path */
     int path_id = 0;
+    bool change_path = false;   /* whether the flow need to change path for this packet */
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -82,10 +84,23 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
             flow_ptr = xpath_search_flow_table(&ft, &f);
             if (flow_ptr)
             {
-                if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
-                    atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
-                else
-                    atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
+                if (xpath_load_balancing == PRESTO)
+                {
+                    if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
+                    {
+                        atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
+                        change_path = true;
+                    }
+                    else
+                    {
+                        atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
+                        change_path = false;
+                    }
+                }
+                else if (xpath_load_balancing == RPS)
+                {
+                    change_path = true;
+                }
             }
         }
 
@@ -96,15 +111,19 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
             path_ip = iph->daddr;
             printk(KERN_INFO "XPath: cannot find path information\n");
         }
-        /* perform per-packet load balancing */
         else if (flow_ptr)
         {
             path_id = atomic_read(&(flow_ptr->info.path_id));
-            path_id = (path_id + 1) % path_ptr->num_paths;
-            atomic_set(&(flow_ptr->info.path_id), path_id);
+            if (change_path)
+            {
+                /* round-robin */
+                path_id = (path_id + 1) % path_ptr->num_paths;
+                atomic_set(&(flow_ptr->info.path_id), path_id);
+            }
+            /* get path IP address */
             path_ip = path_ptr->paths[path_id];
         }
-        /* use the first path by default */
+        /* choose the first path for SYN/FIN/RST packets */
         else
         {
             path_ip = path_ptr->paths[0];
@@ -136,7 +155,7 @@ static unsigned int xpath_hook_func_out(unsigned int hooknum, struct sk_buff *sk
 }
 
 /* Hook function for incoming packets */
-static unsigned int xpath_hook_func_in(unsigned int hooknum, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
+static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops, struct sk_buff *skb, const struct net_device *in, const struct net_device *out, int (*okfn)(struct sk_buff *))
 {
     struct iphdr *iph = ip_hdr(skb);
 

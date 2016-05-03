@@ -37,8 +37,8 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
     struct xpath_flow_entry *flow_ptr = NULL;
     struct xpath_path_entry *path_ptr = NULL;
     u32 path_ip = 0;    /* IP address of the path */
-    int path_id = 0;
-    bool change_path = false;   /* whether the flow need to change path for this packet */
+    int path_id = 0; /* Default path index */
+    unsigned short hash_key = 0; 
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -56,6 +56,15 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
         f.local_port = (u16)ntohs(tcph->source);
         f.remote_port = (u16)ntohs(tcph->dest);
 
+        path_ptr = xpath_search_path_table(&pt, iph->daddr);
+        /* cannot find path information */
+        if (unlikely(!path_ptr || path_ptr->num_paths == 0))
+        {
+            // path_ip = iph->daddr;
+            printk(KERN_INFO "XPath: cannot find path information\n");
+            // do not add outer IP header to such packet
+            return NF_ACCEPT;
+        }
         if (tcph->syn)
         {
             /* modify MSS for TCP SYN packets */
@@ -80,54 +89,46 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
         }
         else
         {
-            payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
             flow_ptr = xpath_search_flow_table(&ft, &f);
             if (flow_ptr)
             {
-                if (xpath_load_balancing == PRESTO)
+                if (xpath_load_balancing == ECMP)
                 {
+                    hash_key = xpath_flow_hash_crc16(f.local_ip, f.local_port, f.remote_ip, f.remote_port);
+
+                    // hash_key_space = 1 << 16;
+                    // region_size = hash_key_space / path_ptr->num_paths;
+                    // path_id = hash_key / region_size;
+                    path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+                }
+                else if (xpath_load_balancing == RPS)
+                {
+                    path_id = atomic_read(&(flow_ptr->info.path_id));
+                    path_id  = (path_id + 1) % path_ptr->num_paths;
+                }
+                else if (xpath_load_balancing == PRESTO)
+                {
+                    path_id = atomic_read(&(flow_ptr->info.path_id));
+                    payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
                     if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
                     {
                         atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
-                        change_path = true;
+                        path_id  = (path_id + 1) % path_ptr->num_paths;
                     }
                     else
                     {
                         atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
-                        change_path = false;
                     }
                 }
-                else if (xpath_load_balancing == RPS)
-                {
-                    change_path = true;
+
+                if (path_id > path_ptr->num_paths) {
+                    path_id -= path_ptr->num_paths; // equivalent to path_id = path_id % path_ptr->num_paths;
                 }
+                atomic_set(&(flow_ptr->info.path_id), path_id);
             }
         }
 
-        path_ptr = xpath_search_path_table(&pt, iph->daddr);
-        /* cannot find path information */
-        if (unlikely(!path_ptr || path_ptr->num_paths == 0))
-        {
-            path_ip = iph->daddr;
-            printk(KERN_INFO "XPath: cannot find path information\n");
-        }
-        else if (flow_ptr)
-        {
-            path_id = atomic_read(&(flow_ptr->info.path_id));
-            if (change_path)
-            {
-                /* round-robin */
-                path_id = (path_id + 1) % path_ptr->num_paths;
-                atomic_set(&(flow_ptr->info.path_id), path_id);
-            }
-            /* get path IP address */
-            path_ip = path_ptr->paths[path_id];
-        }
-        /* choose the first path for SYN/FIN/RST packets */
-        else
-        {
-            path_ip = path_ptr->paths[0];
-        }
+        path_ip = path_ptr->paths[path_id];
 
         /* construct tunnel (outer) IP header */
         tiph.version = 4;

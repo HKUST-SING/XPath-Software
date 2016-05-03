@@ -15,4 +15,7 @@ bool xpath_ipip_encap(struct sk_buff *skb, struct iphdr *tiph, const struct net_
 /* IPIP decapsulation */
 bool xpath_ipip_decap(struct sk_buff *skb);
 
+/* Compute flow hash key by crc16 */
+unsigned short xpath_flow_hash_crc16(unsigned int local_ip, unsigned short local_port, unsigned int remote_ip, unsigned short remote_port);
+
 #endif

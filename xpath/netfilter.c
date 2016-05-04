@@ -37,8 +37,8 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
     struct xpath_flow_entry *flow_ptr = NULL;
     struct xpath_path_entry *path_ptr = NULL;
     u32 path_ip = 0;    /* IP address of the path */
-    int path_id = 0; /* Default path index */
-    unsigned short hash_key = 0; 
+    int path_id = 0;    /* Default path index */
+    unsigned short hash_key = 0;
 
     if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
         return NF_ACCEPT;
@@ -60,30 +60,37 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
         /* cannot find path information */
         if (unlikely(!path_ptr || path_ptr->num_paths == 0))
         {
-            // path_ip = iph->daddr;
-            printk(KERN_INFO "XPath: cannot find path information\n");
-            // do not add outer IP header to such packet
-            return NF_ACCEPT;
+            if (xpath_enable_debug)
+                printk(KERN_INFO "XPath: cannot find path information\n");
+
+            return NF_DROP;
         }
         if (tcph->syn)
         {
             /* modify MSS for TCP SYN packets */
             if (unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr))))
             {
-                printk(KERN_INFO "XPath: cannot modify TCP MSS\n");
+                if (xpath_enable_debug)
+                    printk(KERN_INFO "XPath: cannot modify TCP MSS\n");
                 return NF_DROP;
             }
 
             /* insert a new flow entry to the flow table */
             if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
-                printk(KERN_INFO "XPath: insert flow fails\n");
+            {
+                if (xpath_enable_debug)
+                    printk(KERN_INFO "XPath: insert flow fails\n");
+            }
             /*else
                 printk(KERN_INFO "XPath: insert succeeds\n");*/
         }
         else if (tcph->fin || tcph->rst)
         {
             if (!xpath_delete_flow_table(&ft, &f))
-                printk(KERN_INFO "XPath: delete flow fails\n");
+            {
+                if (xpath_enable_debug)
+                    printk(KERN_INFO "XPath: delete flow fails\n");
+            }
             /*else
                 printk(KERN_INFO "XPath: delete succeeds\n");*/
         }
@@ -92,20 +99,22 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
             flow_ptr = xpath_search_flow_table(&ft, &f);
             if (flow_ptr)
             {
+                /* flow-level ECMP load balancing */
                 if (xpath_load_balancing == ECMP)
                 {
                     hash_key = xpath_flow_hash_crc16(f.local_ip, f.local_port, f.remote_ip, f.remote_port);
-
-                    // hash_key_space = 1 << 16;
-                    // region_size = hash_key_space / path_ptr->num_paths;
-                    // path_id = hash_key / region_size;
+                    /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
                     path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
                 }
+                /* packet-level random packet spraying (RPS) load balancing */
                 else if (xpath_load_balancing == RPS)
                 {
                     path_id = atomic_read(&(flow_ptr->info.path_id));
-                    path_id  = (path_id + 1) % path_ptr->num_paths;
+                    /* path_id = (path_id + 1) % path_ptr->num_paths */
+                    path_id = (++path_id >= path_ptr->num_paths)? path_id - path_ptr->num_paths : path_id;
+                    atomic_set(&(flow_ptr->info.path_id), path_id);
                 }
+                /* flowcell-level Presto load balancing */
                 else if (xpath_load_balancing == PRESTO)
                 {
                     path_id = atomic_read(&(flow_ptr->info.path_id));
@@ -113,18 +122,22 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
                     if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
                     {
                         atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
-                        path_id  = (path_id + 1) % path_ptr->num_paths;
+                        /* path_id = (path_id + 1) % path_ptr->num_paths */
+                        path_id = (++path_id >= path_ptr->num_paths)? path_id - path_ptr->num_paths : path_id;
+                        atomic_set(&(flow_ptr->info.path_id), path_id);
                     }
                     else
                     {
                         atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
                     }
                 }
-
-                if (path_id > path_ptr->num_paths) {
-                    path_id -= path_ptr->num_paths; // equivalent to path_id = path_id % path_ptr->num_paths;
+                else
+                {
+                    if (xpath_enable_debug)
+                        printk(KERN_INFO "XPath: unknown load balancing scheme %d\n", xpath_load_balancing);
+                    /* do not add outer IP header to such packet */
+                    return NF_ACCEPT;
                 }
-                atomic_set(&(flow_ptr->info.path_id), path_id);
             }
         }
 
@@ -147,7 +160,9 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
         /* add tunnel (outer) IP header */
         if (unlikely(!xpath_ipip_encap(skb, &tiph, out)))
         {
-            printk(KERN_INFO "XPath: cannot add outer IP header\n");
+            if (xpath_enable_debug)
+                printk(KERN_INFO "XPath: cannot add outer IP header\n");
+
             return NF_DROP;
         }
     }

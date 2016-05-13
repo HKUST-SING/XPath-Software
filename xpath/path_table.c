@@ -107,9 +107,10 @@ bool xpath_insert_path_table(struct xpath_path_table *pt, unsigned int daddr, un
                 entry->paths = new_paths;
                 entry->congestions = new_congestions;
                 entry->num_paths = num_paths;
+                atomic_set(&entry->path_id, 0);
+
                 vfree(old_paths);
                 vfree(old_congestions);
-
                 return true;
             }
         }
@@ -141,6 +142,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt, unsigned int daddr, un
         entry->paths = new_paths;
         entry->congestions = new_congestions;
         entry->num_paths = num_paths;
+        atomic_set(&entry->path_id, 0);
         hlist_add_head(&entry->hlist, &pt->lists[index]);
 
         return true;
@@ -214,7 +216,7 @@ void xpath_print_path_entry(struct xpath_path_entry *entry)
         return;
 
 	snprintf(ip, 16, "%pI4", &(entry->daddr));
-    printk(KERN_INFO "  Dest %s (%u paths): \n", ip, entry->num_paths);
+    printk(KERN_INFO "  Dest %s (%u paths, current path ID: %u): \n", ip, entry->num_paths, ((unsigned int)atomic_read(&entry->path_id)) % entry->num_paths);
 
     for (i = 0; i < entry->num_paths; i++)
     {

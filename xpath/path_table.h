@@ -10,6 +10,7 @@ struct xpath_path_entry
     unsigned int daddr; //destination IP address
     unsigned int num_paths;
     unsigned int *paths;    //available paths to 'daddr'
+    atomic_t path_id;   //path ID (for per-packet loac balancing)
     atomic_t *congestions;    //congestion degree for different paths
 };
 

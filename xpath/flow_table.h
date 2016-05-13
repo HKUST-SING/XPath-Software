@@ -7,8 +7,8 @@
 
 struct xpath_flow_info
 {
-    atomic_t path_id;   //current path ID
-    atomic_t byte_count;    //Presto
+    unsigned int path_id;   //current path ID
+    unsigned int byte_count;    //Presto
 };
 
 /* A TCP flow is defined by 4-tuple <local_ip, remote_ip, local_port, remote_port> and its related information */

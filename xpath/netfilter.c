@@ -109,26 +109,26 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops, struct sk
                 /* packet-level random packet spraying (RPS) load balancing */
                 else if (xpath_load_balancing == RPS)
                 {
-                    path_id = atomic_read(&(flow_ptr->info.path_id));
+                    path_id = flow_ptr->info.path_id;
                     /* path_id = (path_id + 1) % path_ptr->num_paths */
                     path_id = (++path_id >= path_ptr->num_paths)? path_id - path_ptr->num_paths : path_id;
-                    atomic_set(&(flow_ptr->info.path_id), path_id);
+                    flow_ptr->info.path_id = path_id;
                 }
                 /* flowcell-level Presto load balancing */
                 else if (xpath_load_balancing == PRESTO)
                 {
-                    path_id = atomic_read(&(flow_ptr->info.path_id));
+                    path_id = flow_ptr->info.path_id;
                     payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
-                    if (atomic_read(&(flow_ptr->info.byte_count)) + (int)payload_len > 65535)
+                    if (flow_ptr->info.byte_count + (int)payload_len > 65535)
                     {
-                        atomic_set(&(flow_ptr->info.byte_count), (int)payload_len);
+                        flow_ptr->info.byte_count = payload_len;
                         /* path_id = (path_id + 1) % path_ptr->num_paths */
                         path_id = (++path_id >= path_ptr->num_paths)? path_id - path_ptr->num_paths : path_id;
-                        atomic_set(&(flow_ptr->info.path_id), path_id);
+                        flow_ptr->info.path_id = path_id;
                     }
                     else
                     {
-                        atomic_add((int)payload_len, &(flow_ptr->info.byte_count));
+                        flow_ptr->info.byte_count += payload_len;
                     }
                 }
                 else

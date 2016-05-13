@@ -95,8 +95,8 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 {
 	if (likely(info))
 	{
-		atomic_set(&(info->path_id), 0);
-		atomic_set(&(info->byte_count), 0);
+		info->path_id = 0;
+		info->byte_count = 0;
 		return true;
 	}
 	else

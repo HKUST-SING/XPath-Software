@@ -8,19 +8,19 @@ This framework mainly consists of two parts: a Linux user program and a Linux ke
 and uses IP-in-IP to encapsulate an outer IP header with the destination IP field set to the desired path ID.
 
 ##Getting Started
-Get source repository
+Get source repository.
 ```
 git clone https://github.com/HKUST-SING/XPath-Software.git
 ```
-Build
+You need the kernel headers to compile it:
 ```
 make
 ```
-Load the kernel module
+To install the kernel module:
 ```
 sudo insmod xpath.ko
 ```
-Configure load balancing scheme, ECMP for example
+Configure load balancing scheme, For example, to enable ECMP:
 ```
 sudo sysctl xpath.load_balancing=0
 ```
@@ -32,7 +32,7 @@ Configure local path table. In this case, there are two paths from the local mac
 ```
 TODO (how to run with iperf / TrafficGenerator)
 ```
-Unload the kernel module
+Remove the kernel module
 ```
 sudo rmmod xpath
 ```

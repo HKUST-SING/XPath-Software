@@ -49,3 +49,21 @@ set protocols static route 10.0.0.0/16 qualified-next-hop 172.16.3.2 metric 1
 
 commit
 
+set protocols static route 10.0.2.11/32 next-hop 172.16.1.2
+set protocols static route 10.0.2.21/32 next-hop 172.16.2.2
+set protocols static route 10.0.2.31/32 next-hop 172.16.3.2
+set protocols static route 10.0.2.12/32 next-hop 172.16.1.2
+set protocols static route 10.0.2.22/32 next-hop 172.16.2.2
+set protocols static route 10.0.2.32/32 next-hop 172.16.3.2
+set protocols static route 10.0.2.13/32 next-hop 172.16.1.2
+set protocols static route 10.0.2.23/32 next-hop 172.16.2.2
+set protocols static route 10.0.2.33/32 next-hop 172.16.3.2
+set protocols static route 10.0.2.14/32 next-hop 172.16.1.2
+set protocols static route 10.0.2.24/32 next-hop 172.16.2.2
+set protocols static route 10.0.2.34/32 next-hop 172.16.3.2
+set protocols static route 10.0.2.15/32 next-hop 172.16.1.2
+set protocols static route 10.0.2.25/32 next-hop 172.16.2.2
+set protocols static route 10.0.2.35/32 next-hop 172.16.3.2
+
+commit
+

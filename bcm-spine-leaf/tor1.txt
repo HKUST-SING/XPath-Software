@@ -1,0 +1,23 @@
+l2 clear
+l2 add mac=00:10:18:f5:06:41 port=ge0
+l2 add mac=00:10:18:f5:06:05 port=ge1
+
+l3 init
+l3 intf add vlan=1 mac=00:00:00:00:65:FE intf=0
+
+l3 l3table add mac=00:10:18:f5:06:41 ip=192.168.101.1 port=ge0 intf=0
+l3 l3table add mac=00:10:18:f5:06:41 ip=192.168.101.11 port=ge0 intf=0
+l3 l3table add mac=00:10:18:f5:06:41 ip=192.168.101.21 port=ge0 intf=0
+
+l3 l3table add mac=00:10:18:f5:06:05 ip=192.168.101.2 port=ge1 intf=0
+l3 l3table add mac=00:10:18:f5:06:05 ip=192.168.101.12 port=ge1 intf=0
+l3 l3table add mac=00:10:18:f5:06:05 ip=192.168.101.22 port=ge1 intf=0
+
+l3 l3table add mac=00:00:00:00:67:FE ip=192.168.102.1 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:67:FE ip=192.168.102.11 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:68:FE ip=192.168.102.21 port=ge13 intf=0
+
+l3 l3table add mac=00:00:00:00:67:FE ip=192.168.102.2 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:67:FE ip=192.168.102.12 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:68:FE ip=192.168.102.22 port=ge13 intf=0
+

@@ -1,0 +1,45 @@
+l3 init
+l3 intf add vlan=1 mac=00:00:00:00:67:FE intf=0
+l3 intf add vlan=1 mac=00:00:00:00:68:FE intf=1
+
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.1 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.11 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.21 port=ge1 intf=1
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.2 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.12 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.22 port=ge1 intf=1
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.3 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.13 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.23 port=ge1 intf=1
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.4 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.14 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.24 port=ge1 intf=1
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.5 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.15 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.25 port=ge1 intf=1
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.6 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.16 port=ge0 intf=0
+l3 l3table add mac=00:00:00:00:65:FE ip=192.168.101.26 port=ge1 intf=1
+
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.1 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.11 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.21 port=ge13 intf=1
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.2 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.12 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.22 port=ge13 intf=1
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.3 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.13 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.23 port=ge13 intf=1
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.4 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.14 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.24 port=ge13 intf=1
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.5 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.15 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.25 port=ge13 intf=1
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.6 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.16 port=ge12 intf=0
+l3 l3table add mac=00:00:00:00:66:FE ip=192.168.102.26 port=ge13 intf=1
+
+m wredconfig_cell maxdroprate=0xe enable=1
+m wredparam_cell dropstartpoint=240 dropendpoint=240
+s ecn_config 0xffffff

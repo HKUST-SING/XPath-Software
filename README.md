@@ -22,15 +22,12 @@ sudo insmod xpath.ko
 ```
 Configure load balancing scheme, For example, to enable ECMP:
 ```
-sudo sysctl xpath.load_balancing=0
+sudo sysctl -w xpath.load_balancing=0
 ```
 Configure local path table. In this case, there are two paths from the local machine to 192.168.1.51. Their path IDs are 192.168.101.12 and 192.168.101.13 respectively.
 ```
 ./xpath-user -i 192.168.1.51 192.168.101.12 192.168.101.13
 ```
-[TODO] Run
-```
-TODO (how to run with iperf / TrafficGenerator)
 ```
 Remove the kernel module
 ```

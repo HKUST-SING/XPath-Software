@@ -23,43 +23,50 @@ struct xpath_path_table pt;
 
 static int xpath_module_init(void)
 {
-    int i = 0;
+        int i = 0;
 
-    /* get interface */
-    if (param_dev)
-    {
-        /* trim */
-        for (i = 0; i < 32 && param_dev[i] != '\0'; i++)
+        /* get interface */
+        if (param_dev)
         {
-            if(param_dev[i] == '\n')
-            {
-                param_dev[i] = '\0';
-                break;
-            }
+                /* trim */
+                for (i = 0; i < 32 && param_dev[i] != '\0'; i++)
+                {
+                        if (param_dev[i] == '\n')
+                        {
+                                param_dev[i] = '\0';
+                                break;
+                        }
+                }
         }
-    }
 
-    if (likely(xpath_params_init() && xpath_init_flow_table(&ft)
-        && xpath_init_path_table(&pt) && xpath_netfilter_init()
-        && xpath_netlink_init()))
-    {
-        printk(KERN_INFO "XPath: start on %s (TCP port %d)\n", param_dev? param_dev:"any interface", param_port);
-        return 0;
-    }
-    else
-        return -1;
+        if (likely(xpath_params_init() &&
+                   xpath_init_flow_table(&ft) &&
+                   xpath_init_path_table(&pt) &&
+                   xpath_netfilter_init() &&
+                   xpath_netlink_init()))
+        {
+                printk(KERN_INFO "XPath: start on %s (TCP port %d)\n",
+                                 param_dev? param_dev:"any interface",
+                                 param_port);
+                return 0;
+        }
+        else
+        {
+                printk(KERN_INFO "XPath: cannot start\n");
+                return -1;
+        }
 }
 
 static void xpath_module_exit(void)
 {
-	xpath_netfilter_exit();
-    xpath_netlink_exit();
+        xpath_netfilter_exit();
+        xpath_netlink_exit();
 
-    xpath_exit_path_table(&pt);
-    xpath_exit_flow_table(&ft);
-    xpath_params_exit();
+        xpath_exit_path_table(&pt);
+        xpath_exit_flow_table(&ft);
+        xpath_params_exit();
 
-    printk(KERN_INFO "XPath: stop working\n");
+        printk(KERN_INFO "XPath: stop working\n");
 }
 
 module_init(xpath_module_init);

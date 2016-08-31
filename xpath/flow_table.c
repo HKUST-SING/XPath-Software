@@ -21,9 +21,18 @@ void xpath_print_flow_entry(struct xpath_flow_entry *f, char *operation)
 	snprintf(remote_ip, 16, "%pI4", &(f->remote_ip));
 
 	if (operation)
-		printk(KERN_INFO "XPath: %s a flow record from %s:%hu to %s:%hu\n", operation, local_ip, f->local_port, remote_ip, f->remote_port);
+		printk(KERN_INFO "XPath: %s a flow (%s:%hu to %s:%hu)\n",
+				 operation,
+				 local_ip,
+				 f->local_port,
+				 remote_ip,
+				 f->remote_port);
 	else
-		printk(KERN_INFO "XPath: a flow record from %s:%hu to %s:%hu\n", local_ip, f->local_port, remote_ip, f->remote_port);
+		printk(KERN_INFO "XPath: flow (%s:%hu to %s:%hu\n",
+				 local_ip,
+				 f->local_port,
+				 remote_ip,
+				 f->remote_port);
 }
 
 /* Print a Flow List */
@@ -56,21 +65,26 @@ void xpath_print_flow_table(struct xpath_flow_table *ft)
 
 	for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++)
 	{
-		if (ft->flow_lists[i].len > 0)
-		{
-        	printk(KERN_INFO "XPath: flowlist %d has %u flows\n", i, ft->flow_lists[i].len);
-			xpath_print_flow_list(&(ft->flow_lists[i]));
-		}
+		if (ft->flow_lists[i].len == 0)
+			continue;
+
+        	printk(KERN_INFO "XPath: flowlist %d has %u flows\n",
+				 i,
+				 ft->flow_lists[i].len);
+		xpath_print_flow_list(&(ft->flow_lists[i]));
 	}
 
-	printk(KERN_INFO "XPath: there are %d flows in total\n", atomic_read(&(ft->size)));
+	printk(KERN_INFO "XPath: %d flows in total\n", atomic_read(&(ft->size)));
 }
 
 /* Hash function, calculate the flow should be inserted into which xpath_flow_list */
 inline unsigned int xpath_hash_flow(struct xpath_flow_entry *f)
 {
 	if (likely(f))
-		return (((f->local_ip >> 24) + 1) * ((f->remote_ip >> 24) + 1) * (f->local_port + 1) * (f->remote_port + 1)) % XPATH_FLOW_HASH_RANGE;
+		return (((f->local_ip >> 24) + 1) * \
+			((f->remote_ip >> 24) + 1) * \
+			(f->local_port + 1) * \
+			(f->remote_port + 1)) % XPATH_FLOW_HASH_RANGE;
 	else
 	{
 		printk(KERN_INFO "xpath_hash_flow: NULL pointer\n");
@@ -78,11 +92,15 @@ inline unsigned int xpath_hash_flow(struct xpath_flow_entry *f)
 	}
 }
 
-/* Determine whether two Flows are equal. <local_ip, remote_ip, local_port, remote_port> determines a flow */
-inline bool xpath_equal_flow(struct xpath_flow_entry *f1, struct xpath_flow_entry *f2)
+/* Determine whether two flows are identical */
+inline bool xpath_equal_flow(struct xpath_flow_entry *f1,
+			     struct xpath_flow_entry *f2)
 {
 	if (likely(f1 && f2))
-		return (f1->local_ip == f2->local_ip) && (f1->remote_ip == f2->remote_ip) && (f1->local_port == f2->local_port) && (f1->remote_port == f2->remote_port);
+		return (f1->local_ip == f2->local_ip) && \
+		       (f1->remote_ip == f2->remote_ip) && \
+		       (f1->local_port == f2->local_port) && \
+		       (f1->remote_port == f2->remote_port);
 	else
 	{
 		printk(KERN_INFO "xpath_equal_flow: NULL pointer\n");
@@ -120,7 +138,7 @@ bool xpath_init_flow_entry(struct xpath_flow_entry *f)
 		return true;
 	}
 	else
-    {
+	{
 		printk(KERN_INFO "xpath_init_flow_entry: NULL pointer\n");
 		return false;
 	}
@@ -177,7 +195,8 @@ bool xpath_init_flow_table(struct xpath_flow_table *ft)
 }
 
 /* Search and return the pointer of given flow in a Flow List */
-struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f)
+struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl,
+						struct xpath_flow_entry *f)
 {
 	struct xpath_flow_entry *ptr = NULL;
 
@@ -197,7 +216,8 @@ struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl, stru
 }
 
 /* Search the information for a given Flow in a Flow Table */
-struct xpath_flow_entry *xpath_search_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entry *f)
+struct xpath_flow_entry *xpath_search_flow_table(struct xpath_flow_table *ft,
+						 struct xpath_flow_entry *f)
 {
 	unsigned int index = 0;
 
@@ -212,7 +232,9 @@ struct xpath_flow_entry *xpath_search_flow_table(struct xpath_flow_table *ft, st
 }
 
 /* Insert a Flow into a Flow List and return true if it succeeds */
-bool xpath_insert_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f, int flags)
+bool xpath_insert_flow_list(struct xpath_flow_list *fl,
+			    struct xpath_flow_entry *f,
+			    int flags)
 {
 	struct xpath_flow_entry *buf = NULL;
 	unsigned long tmp;	//variable for save current states of irq
@@ -226,8 +248,8 @@ bool xpath_insert_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry 
 	/* The flow entry exists in this Flow List */
 	if (xpath_search_flow_list(fl, f))
 	{
-    	printk(KERN_INFO "xpath_insert_flow_list: equal flow\n");
-    	return false;
+		printk(KERN_INFO "xpath_insert_flow_list: equal flow\n");
+		return false;
 	}
 	else
 	{
@@ -251,7 +273,9 @@ bool xpath_insert_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry 
 }
 
 /* Insert a Flow into a Flow Table and return true if it succeeds */
-bool xpath_insert_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entry *f, int flags)
+bool xpath_insert_flow_table(struct xpath_flow_table *ft,
+			     struct xpath_flow_entry *f,
+			     int flags)
 {
 	unsigned int index = 0;
 
@@ -272,7 +296,8 @@ bool xpath_insert_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entr
 }
 
 /* Delete a Flow from a Flow List and return true if the delete succeeds */
-bool xpath_delete_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry *f)
+bool xpath_delete_flow_list(struct xpath_flow_list *fl,
+			    struct xpath_flow_entry *f)
 {
 	struct xpath_flow_entry *ptr, *next;
 	unsigned long tmp;
@@ -300,7 +325,8 @@ bool xpath_delete_flow_list(struct xpath_flow_list *fl, struct xpath_flow_entry 
 }
 
 /* Delete a Flow from a Flow Table and return true if the delete succeeds */
-bool xpath_delete_flow_table(struct xpath_flow_table *ft, struct xpath_flow_entry *f)
+bool xpath_delete_flow_table(struct xpath_flow_table *ft,
+			     struct xpath_flow_entry *f)
 {
 	bool result = false;
 	unsigned int index = 0;

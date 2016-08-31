@@ -20,8 +20,8 @@ extern int xpath_enable_debug;
 
 struct xpath_param
 {
-    char name[64];
-    int *ptr;
+        char name[64];
+        int *ptr;
 };
 
 extern struct xpath_param xpath_params[2];

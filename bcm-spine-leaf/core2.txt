@@ -1,5 +1,0 @@
-l3 init
-l3 intf add vlan=1 mac=00:00:00:00:68:FE intf=0
-
-l3 defip add mac=00:00:00:00:65:FE ip=192.168.101.0 mask=255.255.255.0 port=ge0 intf=0
-l3 defip add mac=00:00:00:00:66:FE ip=192.168.102.0 mask=255.255.255.0 port=ge1 intf=0

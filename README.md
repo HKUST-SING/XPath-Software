@@ -28,7 +28,6 @@ Configure local path table. In this case, there are two paths from the local mac
 ```
 ./xpath-user -i 192.168.1.51 192.168.101.12 192.168.101.13
 ```
-```
 Remove the kernel module
 ```
 sudo rmmod xpath

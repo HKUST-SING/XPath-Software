@@ -200,6 +200,11 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                         tiph.daddr = path_ip;
                         tiph.saddr = iph->saddr;
                         tiph.ttl = iph->ttl;
+
+                        /* ECN capable (to avoid switch bug) */
+                        if (!INET_ECN_is_capable(tiph.tos))
+                                tiph.tos |= INET_ECN_ECT_0;
+
                         tiph.check = 0;
                         tiph.check = ip_fast_csum(&tiph, tiph.ihl);
                 }

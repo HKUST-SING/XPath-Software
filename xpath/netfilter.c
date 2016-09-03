@@ -37,18 +37,24 @@ static u32 rps_routing(const struct sk_buff *skb,
 static u32 presto_routing(const struct sk_buff *skb,
                           struct xpath_path_entry *path_ptr)
 {
-        u32 path_id = 0;        /* Default path index */
         u32 payload_len = 0;
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
-        struct xpath_flow_entry f;
         struct xpath_flow_entry *flow_ptr = NULL;
+        u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+                                             iph->daddr,
+                                             (u16)ntohs(tcph->source),
+                                             (u16)ntohs(tcph->dest));
+        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
+        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        struct xpath_flow_entry f;
 
         xpath_init_flow_entry(&f);
         f.local_ip = iph->saddr;
         f.remote_ip = iph->daddr;
         f.local_port = (u16)ntohs(tcph->source);
         f.remote_port = (u16)ntohs(tcph->dest);
+        f.info.path_id = path_id;
 
         if (tcph->syn)
         {

@@ -12,6 +12,8 @@
 #define PRESTO 1
 /* packet-level random packet spraying (RPS) load balancing */
 #define RPS 2
+/* FlowBender load balancing */
+#define FLOWBENDER 3
 
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;

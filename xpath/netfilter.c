@@ -12,6 +12,19 @@
 #include "net_util.h"
 #include "params.h"
 
+struct dctcp {
+	u32 acked_bytes_ecn;
+	u32 acked_bytes_total;
+	u32 prior_snd_una;
+	u32 prior_rcv_nxt;
+	u32 dctcp_alpha;
+	u32 next_seq;
+	u32 ce_state;
+	u32 delayed_ack_reserved;
+	u16 num_cong_rtts;
+	u16 reroute;
+};
+
 /* Flow Table */
 extern struct xpath_flow_table ft;
 /* Path Table */
@@ -33,6 +46,8 @@ static u32 ecmp_routing(const struct sk_buff *skb,
                         struct xpath_path_entry *path_ptr);
 static u32 rps_routing(const struct sk_buff *skb,
                        struct xpath_path_entry *path_ptr);
+static u32 flowbender_routing(const struct sk_buff *skb,
+                              struct xpath_path_entry *path_ptr);
 
 static u32 presto_routing(const struct sk_buff *skb,
                           struct xpath_path_entry *path_ptr)
@@ -122,6 +137,33 @@ static u32 rps_routing(const struct sk_buff *skb,
         return path_ptr->paths[path_id];
 }
 
+static u32 flowbender_routing(const struct sk_buff *skb,
+                              struct xpath_path_entry *path_ptr)
+{
+        u32 path_id = 0;        /* Default path index */
+        struct iphdr *iph = ip_hdr(skb);
+        struct tcphdr *tcph = tcp_hdr(skb);
+        u16 hash_key = 0;
+        struct dctcp *ca = inet_csk_ca(skb->sk);
+
+        hash_key = xpath_flow_hash_crc16(iph->saddr,
+                                         iph->daddr,
+                                         (u16)ntohs(tcph->source),
+                                         (u16)ntohs(tcph->dest));
+
+        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
+        path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        if (likely(ca))
+        {
+                path_id = (path_id + ca->reroute) % path_ptr->num_paths;
+                if (xpath_enable_debug)
+                        printk(KERN_INFO "Reroute %hu\n", ca->reroute);
+        }
+
+        /* Get path IP from path ID */
+        return path_ptr->paths[path_id];
+}
+
 /* Hook function for outgoing packets */
 static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                                         struct sk_buff *skb,
@@ -178,6 +220,9 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                                 break;
                         case RPS:
                                 path_ip = rps_routing(skb, path_ptr);
+                                break;
+                        case FLOWBENDER:
+                                path_ip = flowbender_routing(skb, path_ptr);
                                 break;
                         default:
                                 printk(KERN_INFO "XPath: unknown LB scheme %d\n",

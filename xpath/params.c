@@ -4,20 +4,20 @@
 #include "params.h"
 
 int xpath_load_balancing = ECMP;
-int xpath_load_balancing_min = ECMP;
-int xpath_load_balancing_max = RPS;
-
 int xpath_enable_debug = 0;
-int xpath_enable_debug_min = 0;
-int xpath_enable_debug_max = 1;
+int xpath_flowcell_thresh = 65536;
 
-struct xpath_param xpath_params[2] =
+int xpath_params_min[3] = {ECMP, 0, 0};
+int xpath_params_max[3] = {RPS, 1, 10485760};
+
+struct xpath_param xpath_params[3] =
 {
 	{"load_balancing", &xpath_load_balancing},
 	{"enable_debug", &xpath_enable_debug},
+	{"flowcell_thresh", &xpath_flowcell_thresh},
 };
 
-struct ctl_table xpath_params_table[2];
+struct ctl_table xpath_params_table[3];
 
 struct ctl_path xapath_params_path[] =
 {
@@ -29,28 +29,21 @@ struct ctl_table_header *xpath_sysctl = NULL;
 
 bool xpath_params_init(void)
 {
+	int i;
 	struct ctl_table *entry = NULL;
 	memset(xpath_params_table, 0, sizeof(xpath_params_table));
 
-	/* xpath.load_balancing */
-	entry = &xpath_params_table[0];
-	entry->procname = xpath_params[0].name;
-	entry->data = xpath_params[0].ptr;
-	entry->mode = 0644;
-	entry->proc_handler = &proc_dointvec_minmax;
-	entry->extra1 = &xpath_load_balancing_min;
-	entry->extra2 = &xpath_load_balancing_max;
-	entry->maxlen = sizeof(int);
-
-	/* xpath.enable_debug */
-	entry = &xpath_params_table[1];
-	entry->procname = xpath_params[1].name;
-	entry->data = xpath_params[1].ptr;
-	entry->mode = 0644;
-	entry->proc_handler = &proc_dointvec_minmax;
-	entry->extra1 = &xpath_enable_debug_min;
-	entry->extra2 = &xpath_enable_debug_max;
-	entry->maxlen=sizeof(int);
+	for (i = 0; i < 3; i ++)
+	{
+		entry = &xpath_params_table[i];
+		entry->procname = xpath_params[i].name;
+		entry->data = xpath_params[i].ptr;
+		entry->mode = 0644;
+		entry->proc_handler = &proc_dointvec_minmax;
+		entry->extra1 = &xpath_params_min[i];
+		entry->extra2 = &xpath_params_max[i];
+		entry->maxlen = sizeof(int);
+	}
 
 	xpath_sysctl = register_sysctl_paths(xapath_params_path,
 					     xpath_params_table);

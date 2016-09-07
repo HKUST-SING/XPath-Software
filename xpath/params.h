@@ -17,6 +17,8 @@
 extern int xpath_load_balancing;
 /* whether print necessary debug information */
 extern int xpath_enable_debug;
+/* flowcell threshold in bytes */
+extern int xpath_flowcell_thresh;
 
 struct xpath_param
 {
@@ -24,7 +26,7 @@ struct xpath_param
         int *ptr;
 };
 
-extern struct xpath_param xpath_params[2];
+extern struct xpath_param xpath_params[3];
 
 /* Intialize parameters and register sysctl. Return true if it succeeds. */
 bool xpath_params_init(void);

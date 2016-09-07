@@ -37,9 +37,9 @@ static u32 rps_routing(const struct sk_buff *skb,
 static u32 presto_routing(const struct sk_buff *skb,
                           struct xpath_path_entry *path_ptr)
 {
-        u32 payload_len = 0;
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
+        u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
         struct xpath_flow_entry *flow_ptr = NULL;
         u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
                                              iph->daddr,
@@ -73,27 +73,19 @@ static u32 presto_routing(const struct sk_buff *skb,
                                 printk(KERN_INFO "XPath: delete flow fails\n");
                 }
         }
-        else
+        else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
         {
-                flow_ptr = xpath_search_flow_table(&ft, &f);
-                if (flow_ptr)
+                path_id = flow_ptr->info.path_id;
+                if (flow_ptr->info.byte_count + payload_len > xpath_flowcell_thresh)
                 {
-                        path_id = flow_ptr->info.path_id;
-                        payload_len = ntohs(iph->tot_len) - \
-                                      (iph->ihl << 2) - \
-                                      (tcph->doff << 2);
-
-                        if (flow_ptr->info.byte_count + payload_len > 65535)
-                        {
-                                flow_ptr->info.byte_count = payload_len;
-                                path_id = (++path_id >= path_ptr->num_paths)? \
-                                          path_id - path_ptr->num_paths : path_id;
-                                flow_ptr->info.path_id = path_id;
-                        }
-                        else
-                        {
-                                flow_ptr->info.byte_count += payload_len;
-                        }
+                        flow_ptr->info.byte_count = payload_len;
+                        if (++path_id >= path_ptr->num_paths)
+                                path_id -= path_ptr->num_paths;
+                        flow_ptr->info.path_id = path_id;
+                }
+                else
+                {
+                        flow_ptr->info.byte_count += payload_len;
                 }
         }
 

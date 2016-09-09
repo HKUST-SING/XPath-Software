@@ -21,6 +21,46 @@ struct xpath_flow_table ft;
 /* Path Table */
 struct xpath_path_table pt;
 
+/*
+ * The following two functions are related to param_table_operation
+ * To clear flow table: echo -n clear > /sys/module/xpath/parameters/param_table_operation
+ * To print flow table: echo -n print > /sys/module/xpath/parameters/param_table_operation
+ */
+static int xpath_set_operation(const char *val, struct kernel_param *kp);
+static int xpath_noget(const char *val, struct kernel_param *kp);
+module_param_call(param_table_operation,
+                  xpath_set_operation,
+                  xpath_noget,
+                  NULL,
+                  S_IWUSR); //Write permission by owner
+
+static int xpath_set_operation(const char *val, struct kernel_param *kp)
+{
+        //Clear flow table
+        if (strncmp(val, "clear", 5) == 0)
+        {
+                printk(KERN_INFO "XPath: clear flow table\n");
+                xpath_clear_flow_table(&ft);
+        }
+        //Print flow table
+        else if (strncmp(val, "print", 5) == 0)
+        {
+                printk(KERN_INFO "XPath: print flow table\n");
+                xpath_print_flow_table(&ft);
+        }
+        else
+        {
+                printk(KERN_INFO "XPath: unknown flow table operation %s\n", val);
+        }
+
+        return 0;
+}
+
+static int xpath_noget(const char *val, struct kernel_param *kp)
+{
+        return 0;
+}
+
 static int xpath_module_init(void)
 {
         int i = 0;

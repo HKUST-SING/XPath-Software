@@ -7,8 +7,21 @@
 
 struct xpath_flow_info
 {
-        unsigned int path_id;   //current path ID
-        unsigned int byte_count;    //Presto
+        u16 path_id;    //current path ID (not path IP address)
+        u32 seq;
+        u32 ack_seq;
+        ktime_t last_time;   //last time when we observe a sent packet
+
+        /* following variables are only reset when we change the path */
+        u32 bytes_sent; //bytes sent in current path
+        u32 bytes_rtx;  //bytes retransmiited in current path
+        u16 timeouts;   //# of timeouts in current path
+
+        /* following variables are updated 1) per fixed time intervals
+           and 2) when we change the path */
+        u32 bytes_acked;        //bytes acknowledged by the remote side
+        u32 bytes_acked_ecn;    //bytes get ECN marked
+        u32 ecn_fraction;       //fraction of ECN marked packets
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */

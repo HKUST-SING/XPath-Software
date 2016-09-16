@@ -114,7 +114,18 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 	if (likely(info))
 	{
 		info->path_id = 0;
-		info->byte_count = 0;
+		info->seq = 0;
+		info->ack_seq = 0;
+		info->last_time = ktime_set(0, 0);
+
+		info->bytes_sent = 0;
+		info->bytes_rtx = 0;
+		info->timeouts = 0;
+
+		info->bytes_acked = 0;
+		info->bytes_acked_ecn = 0;
+		info->ecn_fraction = 0;
+
 		return true;
 	}
 	else

@@ -40,14 +40,33 @@ static struct nf_hook_ops xpath_nf_hook_out;
 static struct nf_hook_ops xpath_nf_hook_in;
 
 /* Return desired path IP based on load balancing mechanisms */
-static u32 presto_routing(const struct sk_buff *skb,
-                          struct xpath_path_entry *path_ptr);
 static u32 ecmp_routing(const struct sk_buff *skb,
                         struct xpath_path_entry *path_ptr);
+static u32 presto_routing(const struct sk_buff *skb,
+			  struct xpath_path_entry *path_ptr);
 static u32 rps_routing(const struct sk_buff *skb,
                        struct xpath_path_entry *path_ptr);
 static u32 flowbender_routing(const struct sk_buff *skb,
                               struct xpath_path_entry *path_ptr);
+
+static u32 ecmp_routing(const struct sk_buff *skb,
+                        struct xpath_path_entry *path_ptr)
+{
+        u32 path_id = 0;        /* Default path index */
+        struct iphdr *iph = ip_hdr(skb);
+        struct tcphdr *tcph = tcp_hdr(skb);
+        u16 hash_key = 0;
+
+        hash_key = xpath_flow_hash_crc16(iph->saddr,
+                                         iph->daddr,
+                                         (u16)ntohs(tcph->source),
+                                         (u16)ntohs(tcph->dest));
+        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
+        path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+
+        /* Get path IP from path ID */
+        return path_ptr->paths[path_id];
+}
 
 static u32 presto_routing(const struct sk_buff *skb,
                           struct xpath_path_entry *path_ptr)
@@ -91,37 +110,18 @@ static u32 presto_routing(const struct sk_buff *skb,
         else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
         {
                 path_id = flow_ptr->info.path_id;
-                if (flow_ptr->info.byte_count + payload_len > xpath_flowcell_thresh)
+                if (flow_ptr->info.bytes_sent + payload_len > xpath_flowcell_thresh)
                 {
-                        flow_ptr->info.byte_count = payload_len;
+                        flow_ptr->info.bytes_sent = payload_len;
                         if (++path_id >= path_ptr->num_paths)
                                 path_id -= path_ptr->num_paths;
                         flow_ptr->info.path_id = path_id;
                 }
                 else
                 {
-                        flow_ptr->info.byte_count += payload_len;
+                        flow_ptr->info.bytes_sent += payload_len;
                 }
         }
-
-        /* Get path IP from path ID */
-        return path_ptr->paths[path_id];
-}
-
-static u32 ecmp_routing(const struct sk_buff *skb,
-                        struct xpath_path_entry *path_ptr)
-{
-        u32 path_id = 0;        /* Default path index */
-        struct iphdr *iph = ip_hdr(skb);
-        struct tcphdr *tcph = tcp_hdr(skb);
-        u16 hash_key = 0;
-
-        hash_key = xpath_flow_hash_crc16(iph->saddr,
-                                         iph->daddr,
-                                         (u16)ntohs(tcph->source),
-                                         (u16)ntohs(tcph->dest));
-        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
         /* Get path IP from path ID */
         return path_ptr->paths[path_id];
@@ -210,28 +210,28 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                 }
 
 
-                switch (xpath_load_balancing)
-                {
-                        case PRESTO:
-                                path_ip = presto_routing(skb, path_ptr);
-                                break;
-                        case ECMP:
-                                path_ip = ecmp_routing(skb, path_ptr);
-                                break;
-                        case RPS:
-                                path_ip = rps_routing(skb, path_ptr);
-                                break;
-                        case FLOWBENDER:
-                                path_ip = flowbender_routing(skb, path_ptr);
-                                break;
-                        default:
-                                printk(KERN_INFO "XPath: unknown LB scheme %d\n",
+		switch (xpath_load_balancing)
+		{
+			case ECMP:
+				path_ip = ecmp_routing(skb, path_ptr);
+				break;
+			case PRESTO:
+				path_ip = presto_routing(skb, path_ptr);
+				break;
+			case RPS:
+                        	path_ip = rps_routing(skb, path_ptr);
+                        	break;
+			case FLOWBENDER:
+				path_ip = flowbender_routing(skb, path_ptr);
+				break;
+			default:
+                        	printk(KERN_INFO "XPath: unknown LB scheme %d\n",
                                                  xpath_load_balancing);
-                }
+		}
 
                 /* construct tunnel (outer) IP header */
-                if (likely(path_ip > 0))
-                {
+		if (likely(path_ip > 0))
+		{
                         tiph.version = 4;
                         tiph.ihl = sizeof(struct iphdr) >> 2;
                         tiph.tot_len =  htons(ntohs(iph->tot_len) + \
@@ -259,14 +259,14 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                 /* add tunnel (outer) IP header */
                 if (unlikely(!xpath_ipip_encap(skb, &tiph, out)))
                 {
-                        if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: cannot add IP header\n");
+			if (xpath_enable_debug)
+                        	printk(KERN_INFO "XPath: cannot add IP header\n");
 
-                        return NF_DROP;
-                }
-        }
+			return NF_DROP;
+		}
+	}
 
-        return NF_ACCEPT;
+	return NF_ACCEPT;
 }
 
 /* Hook function for incoming packets */

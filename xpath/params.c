@@ -8,7 +8,7 @@ int xpath_enable_debug = 0;
 int xpath_flowcell_thresh = 65536;
 
 int xpath_params_min[3] = {ECMP, 0, 0};
-int xpath_params_max[3] = {FLOWBENDER, 1, 104857600};
+int xpath_params_max[3] = {TLB, 1, 104857600};
 
 struct xpath_param xpath_params[3] =
 {

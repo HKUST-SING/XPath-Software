@@ -12,6 +12,12 @@
 #include "net_util.h"
 #include "params.h"
 
+/* borrow from codel_time_after in include/net/codel.h of Linux kernel */
+#define seq_after(a, b)						\
+	(typecheck(u32, a) &&					\
+	 typecheck(u32, b) &&					\
+	 ((s32)((a) - (b)) > 0))
+
 struct dctcp {
 	u32 acked_bytes_ecn;
 	u32 acked_bytes_total;
@@ -48,21 +54,20 @@ static u32 rps_routing(const struct sk_buff *skb,
                        struct xpath_path_entry *path_ptr);
 static u32 flowbender_routing(const struct sk_buff *skb,
                               struct xpath_path_entry *path_ptr);
+static u32 tlb_routing(const struct sk_buff *skb,
+		       struct xpath_path_entry *path_ptr);
 
 static u32 ecmp_routing(const struct sk_buff *skb,
                         struct xpath_path_entry *path_ptr)
 {
-        u32 path_id = 0;        /* Default path index */
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
-        u16 hash_key = 0;
-
-        hash_key = xpath_flow_hash_crc16(iph->saddr,
-                                         iph->daddr,
-                                         (u16)ntohs(tcph->source),
-                                         (u16)ntohs(tcph->dest));
+        u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+					     iph->daddr,
+					     tcph->source,
+					     tcph->dest);
         /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
         /* Get path IP from path ID */
         return path_ptr->paths[path_id];
@@ -74,20 +79,17 @@ static u32 presto_routing(const struct sk_buff *skb,
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
         u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
-        struct xpath_flow_entry *flow_ptr = NULL;
         u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
-                                             iph->daddr,
-                                             (u16)ntohs(tcph->source),
-                                             (u16)ntohs(tcph->dest));
+		                             iph->daddr,
+					     tcph->source,
+                                             tcph->dest);
         /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
         u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+	struct xpath_flow_entry *flow_ptr = NULL;
         struct xpath_flow_entry f;
 
         xpath_init_flow_entry(&f);
-        f.local_ip = iph->saddr;
-        f.remote_ip = iph->daddr;
-        f.local_port = (u16)ntohs(tcph->source);
-        f.remote_port = (u16)ntohs(tcph->dest);
+	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
         f.info.path_id = path_id;
 
         if (tcph->syn)
@@ -140,19 +142,17 @@ static u32 rps_routing(const struct sk_buff *skb,
 static u32 flowbender_routing(const struct sk_buff *skb,
                               struct xpath_path_entry *path_ptr)
 {
-        u32 path_id = 0;        /* Default path index */
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
-        u16 hash_key = 0;
         struct dctcp *ca = inet_csk_ca(skb->sk);
 
-        hash_key = xpath_flow_hash_crc16(iph->saddr,
-                                         iph->daddr,
-                                         (u16)ntohs(tcph->source),
-                                         (u16)ntohs(tcph->dest));
-
+	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+		                             iph->daddr,
+					     tcph->source,
+                                             tcph->dest);
         /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+
         if (likely(ca))
         {
                 path_id = (path_id + ca->reroute) % path_ptr->num_paths;
@@ -162,6 +162,71 @@ static u32 flowbender_routing(const struct sk_buff *skb,
 
         /* Get path IP from path ID */
         return path_ptr->paths[path_id];
+}
+
+static u32 tlb_routing(const struct sk_buff *skb,
+		       struct xpath_path_entry *path_ptr)
+{
+	ktime_t now = ktime_get();
+	ktime_t last_time;
+	struct iphdr *iph = ip_hdr(skb);
+	struct tcphdr *tcph = tcp_hdr(skb);
+	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
+	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+					     iph->daddr,
+					     tcph->source,
+					     tcph->dest);
+	/* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
+	u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+	struct xpath_flow_entry *flow_ptr = NULL;
+	struct xpath_flow_entry f;
+
+	xpath_init_flow_entry(&f);
+	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
+	f.info.path_id = path_id;
+
+	if (tcph->syn)
+	{
+		f.info.seq = ntohl(tcph->seq);
+		f.info.last_tx_time = ktime_get();
+
+                /* insert a new flow entry to the flow table */
+                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
+                {
+                        if (xpath_enable_debug)
+                                printk(KERN_INFO "XPath: insert flow fails\n");
+                }
+	}
+	else if (tcph->fin || tcph->rst)
+	{
+		if (!xpath_delete_flow_table(&ft, &f))
+		{
+                        if (xpath_enable_debug)
+                                printk(KERN_INFO "XPath: delete flow fails\n");
+		}
+	}
+	else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
+	{
+		last_time = flow_ptr->info.last_ecn_update_time;
+		/* not yet start ECN measurement */
+		if (unlikely(last_time.tv64 == 0))
+			goto out;
+
+		/* Expired update interval */
+		if (ktime_us_delta(now, last_time) > XPATH_ECN_UPDATE_INTERVAL)
+		{
+			/* if bytes_acked_ecn > 8MB, ecn_fraction will overflow */
+			u32 ecn_fraction = flow_ptr->info.bytes_acked_ecn << 10;
+			do_div(ecn_fraction, max(1U, flow_ptr->info.bytes_acked_total));
+			if (xpath_enable_debug)
+				printk(KERN_INFO "ECN fraction %u\n", ecn_fraction);
+		}
+	}
+
+
+out:
+	/* Get path IP from path ID */
+	return path_ptr->paths[path_id];
 }
 
 /* Hook function for outgoing packets */
@@ -224,8 +289,11 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 			case FLOWBENDER:
 				path_ip = flowbender_routing(skb, path_ptr);
 				break;
+			case TLB:
+				path_ip = tlb_routing(skb, path_ptr);
+				break;
 			default:
-                        	printk(KERN_INFO "XPath: unknown LB scheme %d\n",
+				printk(KERN_INFO "XPath: unknown LB scheme %d\n",
                                                  xpath_load_balancing);
 		}
 
@@ -251,10 +319,13 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                         tiph.check = 0;
                         tiph.check = ip_fast_csum(&tiph, tiph.ihl);
                 }
-                else
-                {
-                        return NF_DROP;
-                }
+		else
+		{
+			if (xpath_enable_debug)
+				printk(KERN_INFO "Xpath: invalid path IP\n");
+
+			return NF_DROP;
+		}
 
                 /* add tunnel (outer) IP header */
                 if (unlikely(!xpath_ipip_encap(skb, &tiph, out)))
@@ -276,17 +347,63 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
                                        const struct net_device *out,
                                        int (*okfn)(struct sk_buff *))
 {
-        struct iphdr *iph = ip_hdr(skb);
+	struct iphdr *iph = ip_hdr(skb);
+	struct tcphdr *tcph = NULL;
+	struct xpath_flow_entry *flow_ptr = NULL;
+	struct xpath_flow_entry f;
+	u32 bytes_acked;
 
-        if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
-                return NF_ACCEPT;
+	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
+                goto out;
 
-        if (likely(iph) && iph->protocol == IPPROTO_IPIP)
-        {
-                if (unlikely(!xpath_ipip_decap(skb)))
-                        printk(KERN_INFO "XPath: cannot remove IP header\n");
-        }
+	if (unlikely(!iph) || iph->protocol != IPPROTO_IPIP)
+		goto out;
 
+	if (unlikely(!xpath_ipip_decap(skb)))
+	{
+		printk(KERN_INFO "XPath: cannot remove IP header\n");
+		goto out;
+	}
+
+	/* if we perform TLB load balancing, we need to update states in RX path */
+	if (xpath_load_balancing != TLB)
+		goto out;
+
+	/* after decap outer IP header, we need to get the inner IP header */
+	iph = ip_hdr(skb);
+
+	/* we only handle TCP ACK packets */
+	if (iph->protocol != IPPROTO_TCP || !(tcph = tcp_hdr(skb)) || !(tcph->ack))
+		goto out;
+
+	/* Note that in reverse direction, local = destion, remote = source */
+	xpath_set_flow_4tuple(&f, iph->daddr, iph->saddr, ntohs(tcph->dest), ntohs(tcph->source));
+	flow_ptr = xpath_search_flow_table(&ft, &f);
+	if (unlikely(!flow_ptr))
+		goto out;
+
+	/* initialize some states */
+	if (unlikely(flow_ptr->info.ack_seq == 0))
+		flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+
+	if (unlikely(flow_ptr->info.last_ecn_update_time.tv64 == 0))
+		flow_ptr->info.last_ecn_update_time = ktime_get();
+
+	if (unlikely(!seq_after(ntohl(tcph->ack_seq), flow_ptr->info.ack_seq)))
+		goto out;
+
+	/* get ACK data in bytes */
+	bytes_acked = ntohl(tcph->ack_seq) - flow_ptr->info.ack_seq;
+	flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+	flow_ptr->info.bytes_acked_total += bytes_acked;
+
+	if (tcph->ece)
+		flow_ptr->info.bytes_acked_ecn += bytes_acked;
+
+	if (xpath_enable_debug)
+		printk(KERN_INFO "Bytes ACKed %u\n", bytes_acked);
+
+out:
         return NF_ACCEPT;
 }
 

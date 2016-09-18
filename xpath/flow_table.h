@@ -4,24 +4,25 @@
 #include <linux/types.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
+#include <linux/ip.h>
+#include <net/tcp.h>
 
 struct xpath_flow_info
 {
         u16 path_id;    //current path ID (not path IP address)
-        u32 seq;
-        u32 ack_seq;
-        ktime_t last_time;   //last time when we observe a sent packet
+        u32 seq;        //update for every TX packet
+        u32 ack_seq;    //update for every RX packet
+        ktime_t last_tx_time;   //last time when we observe a sent packet
 
         /* following variables are only reset when we change the path */
         u32 bytes_sent; //bytes sent in current path
         u32 bytes_rtx;  //bytes retransmiited in current path
         u16 timeouts;   //# of timeouts in current path
 
-        /* following variables are updated 1) per fixed time intervals
-           and 2) when we change the path */
-        u32 bytes_acked;        //bytes acknowledged by the remote side
+        u32 bytes_acked_total;  //bytes acknowledged by the remote side
         u32 bytes_acked_ecn;    //bytes get ECN marked
         u32 ecn_fraction;       //fraction of ECN marked packets
+        ktime_t last_ecn_update_time;   //last time when we update ECN fraction
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */
@@ -64,6 +65,11 @@ bool xpath_init_flow_info(struct xpath_flow_info *info);
 bool xpath_init_flow_entry(struct xpath_flow_entry *f);
 bool xpath_init_flow_list(struct xpath_flow_list *fl);
 bool xpath_init_flow_table(struct xpath_flow_table *ft);
+void xpath_set_flow_4tuple(struct xpath_flow_entry *f,
+                           u32 local_ip,
+                           u32 remote_ip,
+                           u16 local_port,
+                           u16 remote_port);
 
 /* Search functions: search a flow entry from flow table/list */
 struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl,

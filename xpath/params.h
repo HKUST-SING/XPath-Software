@@ -1,6 +1,9 @@
 #ifndef PARAMS_H
 #define PARAMS_H
 
+/* ECN update intervalin microsecond */
+#define XPATH_ECN_UPDATE_INTERVAL 500
+
 /* Hash range for XPath flow table (Number of flow lists) */
 #define XPATH_FLOW_HASH_RANGE 256
 /* Hash range for XPath path table */
@@ -14,6 +17,8 @@
 #define RPS 2
 /* FlowBender load balancing */
 #define FLOWBENDER 3
+/* Our solution: TLB */
+#define TLB 4
 
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;

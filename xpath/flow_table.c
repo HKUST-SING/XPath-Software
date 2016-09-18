@@ -116,15 +116,16 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 		info->path_id = 0;
 		info->seq = 0;
 		info->ack_seq = 0;
-		info->last_time = ktime_set(0, 0);
+		info->last_tx_time = ktime_set(0, 0);
 
 		info->bytes_sent = 0;
 		info->bytes_rtx = 0;
 		info->timeouts = 0;
 
-		info->bytes_acked = 0;
+		info->bytes_acked_total = 0;
 		info->bytes_acked_ecn = 0;
 		info->ecn_fraction = 0;
+		info->last_ecn_update_time = ktime_set(0, 0);
 
 		return true;
 	}
@@ -203,6 +204,22 @@ bool xpath_init_flow_table(struct xpath_flow_table *ft)
 		printk(KERN_INFO "xpath_init_flow_table: vmalloc error\n");
 		return false;
 	}
+}
+
+/* set 4 tuples (src/dst IP and src/dst port) of the flow entry */
+void xpath_set_flow_4tuple(struct xpath_flow_entry *f,
+			   u32 local_ip,
+			   u32 remote_ip,
+			   u16 local_port,
+			   u16 remote_port)
+{
+	if (unlikely(!f))
+		return;
+
+	f->local_ip = local_ip;
+	f->remote_ip = remote_ip;
+	f->local_port = local_port;
+	f->remote_port = remote_port;
 }
 
 /* Search and return the pointer of given flow in a Flow List */

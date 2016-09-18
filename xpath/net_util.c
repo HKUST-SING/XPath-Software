@@ -174,8 +174,8 @@ bool xpath_ipip_decap(struct sk_buff *skb)
 
 /* Compute flow hash key by crc16 */
 unsigned short xpath_flow_hash_crc16(unsigned int local_ip,
-                                     unsigned short local_port,
                                      unsigned int remote_ip,
+                                     unsigned short local_port,
                                      unsigned short remote_port)
 {
         unsigned short shorts[] = {local_ip & 0xff, local_ip >> 16, local_port,

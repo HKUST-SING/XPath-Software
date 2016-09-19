@@ -146,6 +146,7 @@ bool xpath_init_flow_entry(struct xpath_flow_entry *f)
 		f->local_port = 0;
 		f->remote_port = 0;
 		INIT_LIST_HEAD(&(f->list));
+		spin_lock_init(&(f->lock));
 		xpath_init_flow_info(&(f->info));
 		return true;
 	}

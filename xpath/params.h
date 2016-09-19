@@ -1,8 +1,10 @@
 #ifndef PARAMS_H
 #define PARAMS_H
 
-/* ECN update intervalin microsecond */
-#define XPATH_ECN_UPDATE_INTERVAL 500
+/* ECN sample intervalin microsecond */
+#define XPATH_ECN_SAMPLE_US 800
+/* ECN sample minimum bytes */
+#define XPATH_ECN_SAMPLE_BYTES 10240
 
 /* Hash range for XPath flow table (Number of flow lists) */
 #define XPATH_FLOW_HASH_RANGE 256

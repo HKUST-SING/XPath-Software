@@ -85,8 +85,7 @@ static u32 presto_routing(const struct sk_buff *skb,
                                              tcph->dest);
         /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
         u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
-	struct xpath_flow_entry *flow_ptr = NULL;
-        struct xpath_flow_entry f;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
 
         xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
@@ -145,7 +144,6 @@ static u32 flowbender_routing(const struct sk_buff *skb,
         struct iphdr *iph = ip_hdr(skb);
         struct tcphdr *tcph = tcp_hdr(skb);
         struct dctcp *ca = inet_csk_ca(skb->sk);
-
 	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
 		                             iph->daddr,
 					     tcph->source,
@@ -167,8 +165,9 @@ static u32 flowbender_routing(const struct sk_buff *skb,
 static u32 tlb_routing(const struct sk_buff *skb,
 		       struct xpath_path_entry *path_ptr)
 {
-	ktime_t now = ktime_get();
-	ktime_t last_time;
+	u32 ecn_fraction;
+	unsigned long tmp;
+	ktime_t last_time, now = ktime_get();
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
 	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
@@ -178,8 +177,7 @@ static u32 tlb_routing(const struct sk_buff *skb,
 					     tcph->dest);
 	/* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
 	u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
-	struct xpath_flow_entry *flow_ptr = NULL;
-	struct xpath_flow_entry f;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
 
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
@@ -207,20 +205,38 @@ static u32 tlb_routing(const struct sk_buff *skb,
 	}
 	else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
 	{
+
 		last_time = flow_ptr->info.last_ecn_update_time;
-		/* not yet start ECN measurement */
-		if (unlikely(last_time.tv64 == 0))
+		/* not yet start a ECN measurement cycle */
+		if (last_time.tv64 == 0)
 			goto out;
 
-		/* Expired update interval */
-		if (ktime_us_delta(now, last_time) > XPATH_ECN_UPDATE_INTERVAL)
-		{
-			/* if bytes_acked_ecn > 8MB, ecn_fraction will overflow */
-			u32 ecn_fraction = flow_ptr->info.bytes_acked_ecn << 10;
-			do_div(ecn_fraction, max(1U, flow_ptr->info.bytes_acked_total));
-			if (xpath_enable_debug)
-				printk(KERN_INFO "ECN fraction %u\n", ecn_fraction);
-		}
+		/* current ECN measurement cycle is still ongoing */
+		if (ktime_us_delta(now, last_time) < XPATH_ECN_SAMPLE_US ||
+		    flow_ptr->info.bytes_acked_total < XPATH_ECN_SAMPLE_BYTES)
+		    	goto out;
+
+		/* if bytes_acked_ecn > 8MB, ecn_fraction will overflow */
+		ecn_fraction = flow_ptr->info.bytes_acked_ecn << 10;
+		do_div(ecn_fraction, max(1U, flow_ptr->info.bytes_acked_total));
+
+		spin_lock_irqsave(&(flow_ptr->lock), tmp);
+		flow_ptr->info.bytes_acked_ecn = 0;
+		flow_ptr->info.bytes_acked_total = 0;
+		spin_unlock_irqrestore(&(flow_ptr->lock), tmp);
+
+		/* smooth = 0.125 * smooth + 0.875 * sample */
+		flow_ptr->info.ecn_fraction += min(ecn_fraction, 1024U) * 7;
+		flow_ptr->info.ecn_fraction >>= 3;
+		/* trigger next measurement cycle */
+		flow_ptr->info.last_ecn_update_time = ktime_set(0, 0);
+
+		/* reset measurement results */
+		if (xpath_enable_debug)
+			printk(KERN_INFO "ECN fraction %u\n", flow_ptr->info.ecn_fraction);
+
+		if (flow_ptr->info.ecn_fraction >= 205)
+
 	}
 
 
@@ -349,9 +365,9 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 {
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = NULL;
-	struct xpath_flow_entry *flow_ptr = NULL;
-	struct xpath_flow_entry f;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
 	u32 bytes_acked;
+	unsigned long tmp;
 
 	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
                 goto out;
@@ -382,11 +398,12 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	if (unlikely(!flow_ptr))
 		goto out;
 
-	/* initialize some states */
+	/* initialize ACK Seq */
 	if (unlikely(flow_ptr->info.ack_seq == 0))
 		flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
 
-	if (unlikely(flow_ptr->info.last_ecn_update_time.tv64 == 0))
+	/* start a ECN measurement cycle */
+	if (flow_ptr->info.last_ecn_update_time.tv64 == 0)
 		flow_ptr->info.last_ecn_update_time = ktime_get();
 
 	if (unlikely(!seq_after(ntohl(tcph->ack_seq), flow_ptr->info.ack_seq)))
@@ -395,14 +412,15 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	/* get ACK data in bytes */
 	bytes_acked = ntohl(tcph->ack_seq) - flow_ptr->info.ack_seq;
 	flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
-	flow_ptr->info.bytes_acked_total += bytes_acked;
 
+	spin_lock_irqsave(&(flow_ptr->lock), tmp);
+	flow_ptr->info.bytes_acked_total += bytes_acked;
 	if (tcph->ece)
 		flow_ptr->info.bytes_acked_ecn += bytes_acked;
+	spin_unlock_irqrestore(&(flow_ptr->lock), tmp);
 
-	if (xpath_enable_debug)
-		printk(KERN_INFO "Bytes ACKed %u\n", bytes_acked);
-
+	//if (xpath_enable_debug)
+	//	printk(KERN_INFO "Bytes ACKed %u\n", bytes_acked);
 out:
         return NF_ACCEPT;
 }

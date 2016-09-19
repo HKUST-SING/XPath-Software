@@ -34,6 +34,7 @@ struct xpath_flow_entry
         u16 remote_port;        //Remote port
         struct xpath_flow_info info;    //Information for this flow
         struct list_head list;  //linked list
+        spinlock_t lock;        //per-flow lock
 };
 
 /* Link List of Flows */

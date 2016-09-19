@@ -6,18 +6,24 @@
 int xpath_load_balancing = ECMP;
 int xpath_enable_debug = 0;
 int xpath_flowcell_thresh = 65536;
+int xpath_tlb_ecn_fraction = 205;
+int xpath_tlb_ecn_sample_us = 800;
+int xpath_tlb_ecn_sample_bytes = 10240;	//10KB by default
 
-int xpath_params_min[3] = {ECMP, 0, 0};
-int xpath_params_max[3] = {TLB, 1, 104857600};
+int xpath_params_min[NUM_PARAMS] = {ECMP, 0, 0, 0, 0, 0};
+int xpath_params_max[NUM_PARAMS] = {TLB, 1, 104857600, 1024, 10000, 1 << 20};
 
-struct xpath_param xpath_params[3] =
+struct xpath_param xpath_params[NUM_PARAMS] =
 {
 	{"load_balancing", &xpath_load_balancing},
 	{"enable_debug", &xpath_enable_debug},
 	{"flowcell_thresh", &xpath_flowcell_thresh},
+	{"tlb_ecn_fraction", &xpath_tlb_ecn_fraction},
+	{"tlb_ecn_sample_us", &xpath_tlb_ecn_sample_us},
+	{"tlb_ecn_sample_bytes", &xpath_tlb_ecn_sample_bytes},
 };
 
-struct ctl_table xpath_params_table[3];
+struct ctl_table xpath_params_table[NUM_PARAMS];
 
 struct ctl_path xapath_params_path[] =
 {
@@ -33,7 +39,7 @@ bool xpath_params_init(void)
 	struct ctl_table *entry = NULL;
 	memset(xpath_params_table, 0, sizeof(xpath_params_table));
 
-	for (i = 0; i < 3; i ++)
+	for (i = 0; i < NUM_PARAMS; i ++)
 	{
 		entry = &xpath_params_table[i];
 		entry->procname = xpath_params[i].name;

@@ -22,7 +22,7 @@ struct xpath_flow_info
         u32 bytes_acked_total;  //bytes acknowledged by the remote side
         u32 bytes_acked_ecn;    //bytes get ECN marked
         u32 ecn_fraction;       //fraction of ECN marked packets
-        ktime_t last_ecn_update_time;   //last time when we update ECN fraction
+        ktime_t ecn_start_time;   //when we start ECN measurement cycle
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */

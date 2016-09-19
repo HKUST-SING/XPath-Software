@@ -165,9 +165,9 @@ static u32 flowbender_routing(const struct sk_buff *skb,
 static u32 tlb_routing(const struct sk_buff *skb,
 		       struct xpath_path_entry *path_ptr)
 {
-	u32 ecn_fraction;
+	u64 ecn_fraction;
 	unsigned long tmp;
-	ktime_t last_time, now = ktime_get();
+	ktime_t start_time, now = ktime_get();
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
 	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
@@ -206,39 +206,40 @@ static u32 tlb_routing(const struct sk_buff *skb,
 	else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
 	{
 
-		last_time = flow_ptr->info.last_ecn_update_time;
+		start_time = flow_ptr->info.ecn_start_time;
 		/* not yet start a ECN measurement cycle */
-		if (last_time.tv64 == 0)
+		if (start_time.tv64 == 0)
 			goto out;
 
-		/* current ECN measurement cycle is still ongoing */
-		if (ktime_us_delta(now, last_time) < XPATH_ECN_SAMPLE_US ||
-		    flow_ptr->info.bytes_acked_total < XPATH_ECN_SAMPLE_BYTES)
+		/* cannot finish current ECN measurement cycle */
+		if (ktime_us_delta(now, start_time) < xpath_tlb_ecn_sample_us ||
+		    flow_ptr->info.bytes_acked_total < xpath_tlb_ecn_sample_bytes)
 		    	goto out;
 
-		/* if bytes_acked_ecn > 8MB, ecn_fraction will overflow */
 		ecn_fraction = flow_ptr->info.bytes_acked_ecn << 10;
 		do_div(ecn_fraction, max(1U, flow_ptr->info.bytes_acked_total));
+		flow_ptr->info.ecn_fraction = min((u32)ecn_fraction, 1024U);
 
 		spin_lock_irqsave(&(flow_ptr->lock), tmp);
 		flow_ptr->info.bytes_acked_ecn = 0;
 		flow_ptr->info.bytes_acked_total = 0;
 		spin_unlock_irqrestore(&(flow_ptr->lock), tmp);
 
-		/* smooth = 0.125 * smooth + 0.875 * sample */
-		flow_ptr->info.ecn_fraction += min(ecn_fraction, 1024U) * 7;
-		flow_ptr->info.ecn_fraction >>= 3;
 		/* trigger next measurement cycle */
-		flow_ptr->info.last_ecn_update_time = ktime_set(0, 0);
+		flow_ptr->info.ecn_start_time = ktime_set(0, 0);
 
 		/* reset measurement results */
 		if (xpath_enable_debug)
 			printk(KERN_INFO "ECN fraction %u\n", flow_ptr->info.ecn_fraction);
 
-		if (flow_ptr->info.ecn_fraction >= 205)
+		if (flow_ptr->info.ecn_fraction < xpath_tlb_ecn_fraction)
+			goto out;
 
+		path_id = flow_ptr->info.path_id;
+		if (++path_id >= path_ptr->num_paths)
+			path_id -= path_ptr->num_paths;
+		flow_ptr->info.path_id = path_id;
 	}
-
 
 out:
 	/* Get path IP from path ID */
@@ -403,8 +404,8 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 		flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
 
 	/* start a ECN measurement cycle */
-	if (flow_ptr->info.last_ecn_update_time.tv64 == 0)
-		flow_ptr->info.last_ecn_update_time = ktime_get();
+	if (flow_ptr->info.ecn_start_time.tv64 == 0)
+		flow_ptr->info.ecn_start_time = ktime_get();
 
 	if (unlikely(!seq_after(ntohl(tcph->ack_seq), flow_ptr->info.ack_seq)))
 		goto out;

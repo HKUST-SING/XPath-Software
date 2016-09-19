@@ -1,11 +1,6 @@
 #ifndef PARAMS_H
 #define PARAMS_H
 
-/* ECN sample intervalin microsecond */
-#define XPATH_ECN_SAMPLE_US 800
-/* ECN sample minimum bytes */
-#define XPATH_ECN_SAMPLE_BYTES 10240
-
 /* Hash range for XPath flow table (Number of flow lists) */
 #define XPATH_FLOW_HASH_RANGE 256
 /* Hash range for XPath path table */
@@ -22,12 +17,20 @@
 /* Our solution: TLB */
 #define TLB 4
 
+#define NUM_PARAMS 6
+
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;
 /* whether print necessary debug information */
 extern int xpath_enable_debug;
 /* flowcell threshold in bytes */
 extern int xpath_flowcell_thresh;
+/* TLB ECN fraction threshold */
+extern int xpath_tlb_ecn_fraction;
+/* TLB ECN sample interval in microsecond */
+extern int xpath_tlb_ecn_sample_us;
+/* TLB ECN minimum sample bytes */
+extern int xpath_tlb_ecn_sample_bytes;
 
 struct xpath_param
 {
@@ -35,7 +38,7 @@ struct xpath_param
         int *ptr;
 };
 
-extern struct xpath_param xpath_params[3];
+extern struct xpath_param xpath_params[NUM_PARAMS];
 
 /* Intialize parameters and register sysctl. Return true if it succeeds. */
 bool xpath_params_init(void);

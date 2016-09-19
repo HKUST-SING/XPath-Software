@@ -125,7 +125,7 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 		info->bytes_acked_total = 0;
 		info->bytes_acked_ecn = 0;
 		info->ecn_fraction = 0;
-		info->last_ecn_update_time = ktime_set(0, 0);
+		info->ecn_start_time = ktime_set(0, 0);
 
 		return true;
 	}

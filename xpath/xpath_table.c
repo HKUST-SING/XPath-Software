@@ -2,7 +2,7 @@
 #include <linux/slab.h>
 #include <asm/atomic.h>
 
-#include "path_table.h"
+#include "xpath_table.h"
 #include "params.h"
 
 /* Calculate hash code for destination address */
@@ -17,23 +17,19 @@ bool xpath_init_path_table(struct xpath_path_table* pt)
         struct hlist_head *buf = NULL;
         int i = 0;
 
-        if (unlikely(!pt))
-	{
+        if (unlikely(!pt)) {
                 printk(KERN_INFO "xpath_init_path_table: NULL pointer\n");
 		return false;
 	}
 
         buf = vmalloc(XPATH_PATH_HASH_RANGE * sizeof(struct hlist_head));
-        if (likely(buf))
-        {
+        if (likely(buf)) {
                 pt->lists = buf;
                 for (i = 0; i < XPATH_PATH_HASH_RANGE; i++)
                         INIT_HLIST_HEAD(&pt->lists[i]);
 
                 return true;
-        }
-        else
-        {
+        } else {
                 printk(KERN_INFO "xpath_init_path_table: vmalloc error\n");
                 return false;
         }
@@ -52,8 +48,7 @@ struct xpath_path_entry *xpath_search_path_table(struct xpath_path_table *pt,
 
         index = xpath_daddr_hash_code(daddr);
 
-        hlist_for_each_entry_safe(entry, ptr, &pt->lists[index], hlist)
-        {
+        hlist_for_each_entry_safe(entry, ptr, &pt->lists[index], hlist) {
                 if (entry->daddr == daddr)
                         return entry;
         }
@@ -67,90 +62,52 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
                              unsigned int num_paths,
                              unsigned int *paths)
 {
-        unsigned int index = 0;
+        unsigned int index, i;
         struct xpath_path_entry *entry = NULL;
         struct hlist_node *ptr = NULL;
-        unsigned int *new_paths = NULL;
-        atomic_t *new_congestions = NULL;
-        unsigned int *old_paths = NULL;
-        atomic_t *old_congestions = NULL;
+        unsigned int *new_path_ips = NULL, *new_path_ids = NULL;
 
-        unsigned int i = 0;
-
-        if (unlikely(!pt || !paths || (num_paths == 0)))
+        if (unlikely(!pt || !paths || num_paths == 0))
                 return false;
 
         index = xpath_daddr_hash_code(daddr);
-        hlist_for_each_entry_safe(entry, ptr, &pt->lists[index], hlist)
-        {
-                /* if the entry already exists, we just update it */
-                if (entry->daddr == daddr)
-                {
-                        new_paths = vmalloc(sizeof(unsigned int) * num_paths);
-                        new_congestions = vmalloc(sizeof(atomic_t) * num_paths);
+        hlist_for_each_entry_safe(entry, ptr, &pt->lists[index], hlist) {
+                /* if the entry already exists, return false */
+                if (entry->daddr == daddr) {
+                        printk(KERN_INFO "Path entry to %u exists\n", daddr);
+                        return false;
+                }
+        }
 
-                        if (unlikely(!new_paths || !new_congestions))
-                        {
-                                vfree(new_paths);
-                                vfree(new_congestions);
-                                return false;
-                        }
-                        else
-                        {
-                                /* copy paths to new_paths */
-                                memcpy(new_paths,
-                                       paths,
-                                       sizeof(unsigned int) * num_paths);
+        entry = vmalloc(sizeof(struct xpath_path_entry));
+        new_path_ips = vmalloc(sizeof(unsigned int) * num_paths);
+        new_path_ids = vmalloc(sizeof(unsigned int) * num_paths);
 
-                                for (i = 0; i < num_paths; i++)
-                                        atomic_set(&new_congestions[i], 0);
+        if (unlikely(!entry || !new_path_ips || !new_path_ids)) {
+                vfree(entry);
+                vfree(new_path_ips);
+                vfree(new_path_ids);
+                return false;
+        }
 
-                                /* update information for this entry */
-                                old_paths = entry->paths;
-                                old_congestions = entry->congestions;
-                                entry->paths = new_paths;
-                                entry->congestions = new_congestions;
-                                entry->num_paths = num_paths;
-                                atomic_set(&entry->path_id, 0);
-
-                                vfree(old_paths);
-                                vfree(old_congestions);
-                                return true;
-                        }
+        //initialize
+        for (i = 0; i < 2 * num_paths; i++) {
+                if (i % 2 == 0) {       //path ID
+                        new_path_ids[i / 2] = paths[i];
+                } else {        //path IP
+                        new_path_ips[i / 2] = paths[i];
                 }
         }
 
         /* insert a new entry */
-        entry = vmalloc(sizeof(struct xpath_path_entry));
-        new_paths = vmalloc(sizeof(unsigned int) * num_paths);
-        new_congestions = vmalloc(sizeof(atomic_t) * num_paths);
-
-        if (unlikely(!entry || !new_paths || !new_congestions))
-        {
-                vfree(entry);
-                vfree(new_paths);
-                vfree(new_congestions);
-                return false;
-        }
-        else
-        {
-                /* copy paths tonew_paths */
-                memcpy(new_paths, paths, sizeof(unsigned int) * num_paths);
-
-                /* initialize congestion degress to 0 for all paths */
-                for (i = 0; i < num_paths; i++)
-                        atomic_set(&new_congestions[i], 0);
-
-                INIT_HLIST_NODE(&entry->hlist);
-                entry->daddr = daddr;
-                entry->paths = new_paths;
-                entry->congestions = new_congestions;
-                entry->num_paths = num_paths;
-                atomic_set(&entry->path_id, 0);
-                hlist_add_head(&entry->hlist, &pt->lists[index]);
-
-                return true;
-        }
+        INIT_HLIST_NODE(&entry->hlist);
+        entry->daddr = daddr;
+        entry->num_paths = num_paths;
+        entry->path_ips = new_path_ips;
+        entry->path_ids = new_path_ids;
+        atomic_set(&entry->current_path, 0);
+        hlist_add_head(&entry->hlist, &pt->lists[index]);
+        return true;
 }
 
 /* Clear all path entries in XPath path table */
@@ -163,13 +120,11 @@ bool xpath_clear_path_table(struct xpath_path_table *pt)
         if (unlikely(!pt))
                 return false;
 
-        for (i = 0; i < XPATH_PATH_HASH_RANGE; i++)
-        {
-            hlist_for_each_entry_safe(entry, ptr, &pt->lists[i], hlist)
-            {
+        for (i = 0; i < XPATH_PATH_HASH_RANGE; i++) {
+            hlist_for_each_entry_safe(entry, ptr, &pt->lists[i], hlist) {
                     hlist_del(&entry->hlist);
-                    vfree(entry->paths);
-                    vfree(entry->congestions);
+                    vfree(entry->path_ips);
+                    vfree(entry->path_ids);
                     vfree(entry);
             }
         }
@@ -198,8 +153,7 @@ bool xpath_print_path_table(struct xpath_path_table *pt)
         if (unlikely(!pt))
                 return false;
 
-        for (i = 0; i < XPATH_PATH_HASH_RANGE; i++)
-        {
+        for (i = 0; i < XPATH_PATH_HASH_RANGE; i++) {
                 if (unlikely(!&pt->lists[i]) || hlist_empty(&pt->lists[i]))
                         continue;
 
@@ -221,17 +175,14 @@ void xpath_print_path_entry(struct xpath_path_entry *entry)
                 return;
 
         snprintf(ip, 16, "%pI4", &(entry->daddr));
-        printk(KERN_INFO "  Dest %s (%u paths, current path ID: %u): \n",
+        printk(KERN_INFO " Dest %s (%u paths, current path: %u): \n",
                          ip,
                          entry->num_paths,
-                         ((unsigned int)atomic_read(&entry->path_id)) % entry->num_paths);
+                         ((unsigned int)atomic_read(&entry->current_path)) % entry->num_paths);
 
-        for (i = 0; i < entry->num_paths; i++)
-        {
-                snprintf(ip, 16, "%pI4", &(entry->paths[i]));
-                printk(KERN_INFO "      %s (%d) \n",
-                                 ip,
-                                 atomic_read(&(entry->congestions[i])));
+        for (i = 0; i < entry->num_paths; i++) {
+                snprintf(ip, 16, "%pI4", &(entry->path_ips[i]));
+                printk(KERN_INFO "      %s (%d) \n", ip, entry->path_ids[i]);
         }
 }
 
@@ -241,8 +192,7 @@ static unsigned int xpath_daddr_hash_code(unsigned int daddr)
         unsigned int sum = 0;
         int i = 0;
 
-        for (i = 0; i < 4; i++)
-        {
+        for (i = 0; i < 4; i++) {
                 sum = sum * 10 + daddr / (1 << (8 * (3 - i)));
                 daddr %= 1 << (8 * (3 - i));
         }

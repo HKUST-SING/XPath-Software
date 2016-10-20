@@ -5,7 +5,7 @@
 #include "netlink.h"
 #include "params.h"
 #include "flow_table.h"
-#include "path_table.h"
+#include "xpath_table.h"
 
 /* param_dev: NIC to operate XPath */
 char *param_dev = NULL;

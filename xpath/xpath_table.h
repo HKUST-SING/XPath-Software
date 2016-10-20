@@ -1,5 +1,5 @@
-#ifndef __PATH_TABLE_H__
-#define __PATH_TABLE_H__
+#ifndef __XPATH_TABLE_H__
+#define __XPATH_TABLE_H__
 
 #include <linux/types.h>
 #include <linux/list.h>
@@ -7,11 +7,11 @@
 struct xpath_path_entry
 {
         struct hlist_node hlist;
-        unsigned int daddr;     //destination IP address
+        unsigned int daddr;     //destination IP address (key)
         unsigned int num_paths;
-        unsigned int *paths;    //available paths to 'daddr'
-        atomic_t path_id;       //path ID (for per-packet loac balancing)
-        atomic_t *congestions;  //congestion degree for different paths
+        unsigned int *path_ips; //path IP addresses
+        unsigned int *path_ids; //path global IDs
+        atomic_t current_path;       //for per-packet loac balancing
 };
 
 struct xpath_path_table

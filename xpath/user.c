@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include "netlink_msg.h"
 
-#define IP_STR_LEN 11 /* 11 should be enough since the maximum IP integet is 2^32 = 4,294,967,296 */
+#define STR_LEN 11 /* max 32-bit unsigned int is 4,294,967,296 (11 chars to store the string)*/
 
 struct sockaddr_nl src_addr, dst_addr;
 struct iovec iov;
@@ -15,19 +15,17 @@ int sockfd;
 struct nlmsghdr *nlh = NULL;
 struct msghdr msg;
 
-
 void print_usage(char *program)
 {
-        if (!program)
-        {
+        if (!program) {
                 return;
         }
 
         printf("Usage: %s [option]\n", program);
-        printf("-i [dest] [path1] [path2] .. insert a new path entry to XPath path table\n");
-        printf("-p                           print XPath path table\n");
-        printf("-c                           clear all path entries in the table\n");
-        printf("-h                           display help information\n");
+        printf("%s [dest] [path ID1] [path IP1] .. insert a new path entry to path table\n", OP_STR_INSERT);
+        printf("%s                                 print path table\n", OP_STR_PRINT);
+        printf("%s                                 clear all path entries in the table\n", OP_STR_CLEAR);
+        printf("%s                                 display help information\n", OP_STR_HELP);
 }
 
 int main(int argc, char **argv)
@@ -35,16 +33,14 @@ int main(int argc, char **argv)
         unsigned int i;
         unsigned int num_paths;
         unsigned int daddr;
-        char ip_str[IP_STR_LEN] = {0};
-        unsigned int ip;
+        char str[STR_LEN] = {0};
+        char formatted_msg[MAX_MSG_LEN] = {0};  //Netlink message
+        unsigned int ip;        //path IP
+        int id; //path ID
 
-
-        char formatted_msg[MAX_MSG_LEN] = {0};
-        sockfd = socket(PF_NETLINK, SOCK_RAW, NETLINK_XPATH);
-        if (sockfd < 0)
-        {
+        if ((sockfd = socket(PF_NETLINK, SOCK_RAW, NETLINK_XPATH)) < 0) {
                 printf("Cannot create socket\n");
-                return -1;
+                return 0;
         }
 
         memset(&src_addr, 0, sizeof(src_addr));
@@ -65,44 +61,50 @@ int main(int argc, char **argv)
         nlh->nlmsg_flags = 0;
         nlh->nlmsg_type = 0;
 
-        if ((argc >= 4) && (strcmp(argv[1], OP_STR_INSERT) == 0))
-        {
-                // msg format : num_paths, dest IP, path id 0, path id 1, ..
-                num_paths = argc - 3;
+        //[program] [OP_STR_INSERT] [dst] [path ID 1] [path IP 1] ....
+        if (argc >= 5 && (argc - 3) % 2 == 0 && strcmp(argv[1], OP_STR_INSERT) == 0) {
+                // msg format : num_paths, dest IP, path ID 0, path IP 0, ..
+                num_paths = (argc - 3) / 2;
                 sprintf(formatted_msg, "%u%c", num_paths, SEP);
-                for (i = 2; i < argc; i++)
-                {
-                        if (inet_pton(AF_INET, argv[i], &ip) == 0)
-                        {
-                                printf("[ERROR] Invalid IP address: %s\n", argv[i]);
-                                return 0;
+
+                for (i = 2; i < argc; i++) {
+                        memset(str, 0, STR_LEN);
+                        //A IP address: destination or path IP
+                        if (i % 2 == 0) {
+                                if (inet_pton(AF_INET, argv[i], &ip) == 0) {
+                                        printf("[ERROR] Invalid IP address: %s\n", argv[i]);
+                                        return 0;
+                                } else {
+                                        sprintf(str, "%u", ip);
+                                }
+                        //A path ID (integer)
+                        } else {
+                                id = atoi(argv[i]);
+                                if (id < 0) {
+                                        printf("[ERROR] Invalid path ID: %s\n", argv[i]);
+                                } else {
+                                        sprintf(str, "%d", id);
+                                }
                         }
 
-                        memset(ip_str, 0, IP_STR_LEN);
-                        sprintf(ip_str, "%u", ip);
-                        if (strlen(formatted_msg) + strlen(ip_str) + 2 > MAX_MSG_LEN)
-                        {
+                        if (strlen(formatted_msg) + strlen(str) + 2 > MAX_MSG_LEN) {
                                 printf("[ERROR] Too many paths\n");
                                 return 0;
                         }
 
-                        strcat(formatted_msg, ip_str);
+                        strcat(formatted_msg, str);
                         strcat(formatted_msg, SEP_STR);
                 }
 
                 strcpy(NLMSG_DATA(nlh), formatted_msg);
                 nlh->nlmsg_type = OP_INSERT;
-        }
-        else if ((argc == 2) && (strcmp(argv[1], OP_STR_PRINT) == 0))
-        {
+                //printf("%s\n", formatted_msg);
+
+        } else if ((argc == 2) && (strcmp(argv[1], OP_STR_PRINT) == 0)) {
                 nlh->nlmsg_type = OP_PRINT;
-        }
-        else if ((argc == 2) && (strcmp(argv[1], OP_STR_CLEAR) == 0))
-        {
+        } else if ((argc == 2) && (strcmp(argv[1], OP_STR_CLEAR) == 0)) {
                 nlh->nlmsg_type = OP_CLEAR;
-        }
-        else
-        {
+        } else {
                 printf("[ERROR] Invalid options\n");
                 print_usage(argv[0]);
                 return 0;

@@ -8,7 +8,7 @@
 
 #include "netfilter.h"
 #include "flow_table.h"
-#include "path_table.h"
+#include "xpath_table.h"
 #include "net_util.h"
 #include "params.h"
 
@@ -70,7 +70,7 @@ static u32 ecmp_routing(const struct sk_buff *skb,
         u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
         /* Get path IP from path ID */
-        return path_ptr->paths[path_id];
+        return path_ptr->path_ips[path_id];
 }
 
 static u32 presto_routing(const struct sk_buff *skb,
@@ -125,17 +125,17 @@ static u32 presto_routing(const struct sk_buff *skb,
         }
 
         /* Get path IP from path ID */
-        return path_ptr->paths[path_id];
+        return path_ptr->path_ips[path_id];
 }
 
 static u32 rps_routing(const struct sk_buff *skb,
                        struct xpath_path_entry *path_ptr)
 {
-        unsigned int path_id = (unsigned int)atomic_inc_return(&path_ptr->path_id);
+        unsigned int path_id = (unsigned int)atomic_inc_return(&path_ptr->current_path);
         path_id = path_id % path_ptr->num_paths;
 
         /* Get path IP from path ID */
-        return path_ptr->paths[path_id];
+        return path_ptr->path_ips[path_id];
 }
 
 static u32 flowbender_routing(const struct sk_buff *skb,
@@ -159,7 +159,7 @@ static u32 flowbender_routing(const struct sk_buff *skb,
         }
 
         /* Get path IP from path ID */
-        return path_ptr->paths[path_id];
+        return path_ptr->path_ips[path_id];
 }
 
 static u32 tlb_routing(const struct sk_buff *skb,
@@ -205,7 +205,6 @@ static u32 tlb_routing(const struct sk_buff *skb,
 	}
 	else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
 	{
-
 		start_time = flow_ptr->info.ecn_start_time;
 		/* not yet start a ECN measurement cycle */
 		if (start_time.tv64 == 0)
@@ -243,7 +242,7 @@ static u32 tlb_routing(const struct sk_buff *skb,
 
 out:
 	/* Get path IP from path ID */
-	return path_ptr->paths[path_id];
+	return path_ptr->path_ips[path_id];
 }
 
 /* Hook function for outgoing packets */

@@ -3,7 +3,7 @@
 #include <net/sock.h>
 #include <net/net_namespace.h>
 
-#include "path_table.h"
+#include "xpath_table.h"
 #include "netlink_msg.h"
 
 #define MAX_ARGS_NUM 100
@@ -28,27 +28,20 @@ static bool get_args_from_msg(char *msg,
 
         *num_args = 0;
         arg_val = 0;
-        for (ptr = msg; ptr && *ptr; ptr++)
-        {
-                if (*ptr == SEP)
-                {
+
+        for (ptr = msg; ptr && *ptr; ptr++) {
+                if (*ptr == SEP) {
                         if (*num_args > MAX_ARGS_NUM)
                                 return false;
 
                         args[(*num_args)++] = arg_val;
                         arg_val = 0;
-                }
-                else
-                {
-                        if (likely(isdigit(*ptr)))
-                        {
-                                digit = *ptr - '0';
-                                arg_val = arg_val * 10 + digit;
-                        }
-                        else
-                        {
-                                return false;
-                        }
+
+                } else if (likely(isdigit(*ptr))) {
+                        digit = *ptr - '0';
+                        arg_val = arg_val * 10 + digit;
+                } else {
+                        return false;
                 }
         }
 
@@ -63,16 +56,16 @@ static bool handle_insert_msg(char *msg)
         unsigned int num_args;
         unsigned int args[MAX_ARGS_NUM];
 
-        if (unlikely(!get_args_from_msg(msg, args, &num_args) || (num_args < 3)))
-        {
+        if (unlikely(!get_args_from_msg(msg, args, &num_args) || (num_args < 3))) {
                 printk(KERN_INFO "XPath: receive invalid insert msg: %s\n", msg);
                 return false;
         }
 
         num_paths = args[0];
         daddr = args[1];
-        paths = &args[2];
+        paths = &args[2];       //path ID and path IP
         //printk(KERN_INFO "num_paths: %u daddr: %u\n", num_paths, daddr);
+
         return xpath_insert_path_table(&pt, daddr, num_paths, paths);
 }
 
@@ -81,15 +74,13 @@ static void on_receiving_data(struct sk_buff *skb)
 {
         struct nlmsghdr *nlh;
 
-        if (unlikely(!skb))
-        {
+        if (unlikely(!skb)) {
                 printk(KERN_INFO "on_receiving_data: NULL pointer\n");
                 return;
         }
 
         nlh = (struct nlmsghdr *)skb->data;
-        switch (nlh->nlmsg_type)
-        {
+        switch (nlh->nlmsg_type) {
                 case OP_INSERT:
                         if (unlikely(!handle_insert_msg(NLMSG_DATA(nlh))))
                                 printk(KERN_INFO "XPath: insert path fails\n");

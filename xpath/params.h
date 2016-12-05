@@ -6,6 +6,10 @@
 /* Hash range for XPath path table */
 #define XPATH_PATH_HASH_RANGE 256
 
+#define XPATH_PATH_GROUP_SIZE 16
+
+#define HIGH_PRIO_DSCP 1
+
 /* flow-level ECMP load balancing */
 #define ECMP 0
 /* flowcell-level Presto load balancing */

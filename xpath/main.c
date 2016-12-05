@@ -5,7 +5,8 @@
 #include "netlink.h"
 #include "params.h"
 #include "flow_table.h"
-#include "xpath_table.h"
+#include "path_table.h"
+#include "path_group.h"
 
 /* param_dev: NIC to operate XPath */
 char *param_dev = NULL;
@@ -20,6 +21,8 @@ module_param(param_port, int, 0);
 struct xpath_flow_table ft;
 /* Path Table */
 struct xpath_path_table pt;
+/* Path Group */
+struct path_group_entry pg[XPATH_PATH_GROUP_SIZE];
 
 /*
  * The following two functions are related to param_table_operation
@@ -36,20 +39,13 @@ module_param_call(param_table_operation,
 
 static int xpath_set_operation(const char *val, struct kernel_param *kp)
 {
-        //Clear flow table
-        if (strncmp(val, "clear", 5) == 0)
-        {
+        if (strncmp(val, "clear", 5) == 0) {    //Clear flow table
                 printk(KERN_INFO "XPath: clear flow table\n");
                 xpath_clear_flow_table(&ft);
-        }
-        //Print flow table
-        else if (strncmp(val, "print", 5) == 0)
-        {
+        } else if (strncmp(val, "print", 5) == 0) { //Print flow table
                 printk(KERN_INFO "XPath: print flow table\n");
                 xpath_print_flow_table(&ft);
-        }
-        else
-        {
+        } else {
                 printk(KERN_INFO "XPath: unknown flow table operation %s\n", val);
         }
 
@@ -66,13 +62,10 @@ static int xpath_module_init(void)
         int i = 0;
 
         /* get interface */
-        if (param_dev)
-        {
+        if (param_dev) {
                 /* trim */
-                for (i = 0; i < 32 && param_dev[i] != '\0'; i++)
-                {
-                        if (param_dev[i] == '\n')
-                        {
+                for (i = 0; i < 32 && param_dev[i] != '\0'; i++) {
+                        if (param_dev[i] == '\n') {
                                 param_dev[i] = '\0';
                                 break;
                         }
@@ -82,6 +75,7 @@ static int xpath_module_init(void)
         if (likely(xpath_params_init() &&
                    xpath_init_flow_table(&ft) &&
                    xpath_init_path_table(&pt) &&
+                   xpath_init_path_group(pg, XPATH_PATH_GROUP_SIZE) &&
                    xpath_netfilter_init() &&
                    xpath_netlink_init()))
         {

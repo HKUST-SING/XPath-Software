@@ -3,7 +3,7 @@
 #include <net/sock.h>
 #include <net/net_namespace.h>
 
-#include "xpath_table.h"
+#include "path_table.h"
 #include "netlink_msg.h"
 
 #define MAX_ARGS_NUM 100
@@ -52,7 +52,7 @@ static bool handle_insert_msg(char *msg)
 {
         unsigned int daddr;
         unsigned int num_paths;
-        unsigned int *paths;
+        unsigned int *path_info;
         unsigned int num_args;
         unsigned int args[MAX_ARGS_NUM];
 
@@ -63,10 +63,10 @@ static bool handle_insert_msg(char *msg)
 
         num_paths = args[0];
         daddr = args[1];
-        paths = &args[2];       //path ID and path IP
+        path_info = &args[2];       //path ID and path IP
         //printk(KERN_INFO "num_paths: %u daddr: %u\n", num_paths, daddr);
 
-        return xpath_insert_path_table(&pt, daddr, num_paths, paths);
+        return xpath_insert_path_table(&pt, daddr, num_paths, path_info);
 }
 
 /* When receive a Netlink message */
@@ -81,16 +81,17 @@ static void on_receiving_data(struct sk_buff *skb)
 
         nlh = (struct nlmsghdr *)skb->data;
         switch (nlh->nlmsg_type) {
+                //insert message
                 case OP_INSERT:
                         if (unlikely(!handle_insert_msg(NLMSG_DATA(nlh))))
                                 printk(KERN_INFO "XPath: insert path fails\n");
                         return;
-
+                //print message
                 case OP_PRINT:
                         if (unlikely(!xpath_print_path_table(&pt)))
                                 printk(KERN_INFO "XPath: print path table fails\n");
                         return;
-
+                //clear message
                 case OP_CLEAR:
                         if (unlikely(!xpath_clear_path_table(&pt)))
                                 printk(KERN_INFO "XPath: clear path table fails\n");
@@ -110,7 +111,7 @@ bool xpath_netlink_init(void)
         struct netlink_kernel_cfg cfg =
         {
                 .groups = 0,
-                .input = on_receiving_data,
+                .input = on_receiving_data,     //function to handle the request
         };
 
         nl_sk = netlink_kernel_create(&init_net, NETLINK_XPATH, &cfg);

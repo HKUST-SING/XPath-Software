@@ -2,7 +2,7 @@
 #include <linux/slab.h>
 #include <asm/atomic.h>
 
-#include "xpath_table.h"
+#include "path_table.h"
 #include "params.h"
 
 /* Calculate hash code for destination address */

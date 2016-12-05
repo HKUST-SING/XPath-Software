@@ -11,8 +11,7 @@ void xpath_print_flow_entry(struct xpath_flow_entry *f, char *operation)
 	char local_ip[16] = {0};   //Local IP address
 	char remote_ip[16] = {0};  //Remote IP address
 
-	if (unlikely(!f))
-	{
+	if (unlikely(!f)) {
 		printk(KERN_INFO "xpath_print_flow_entry: NULL pointer\n");
 		return;
 	}
@@ -40,8 +39,7 @@ void xpath_print_flow_list(struct xpath_flow_list *fl)
 {
 	struct xpath_flow_entry *ptr = NULL;
 
-	if (unlikely(!fl))
-	{
+	if (unlikely(!fl)) {
 		printk(KERN_INFO "xpath_print_flow_list: NULL pointer\n");
 		return;
 	}
@@ -55,16 +53,14 @@ void xpath_print_flow_table(struct xpath_flow_table *ft)
 {
 	int i = 0;
 
-	if (unlikely(!ft))
-	{
+	if (unlikely(!ft)) {
 		printk(KERN_INFO "xpath_print_flow_table: NULL pointer\n");
 		return;
 	}
 
 	printk(KERN_INFO "XPath: current flow table\n");
 
-	for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++)
-	{
+	for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++) {
 		if (ft->flow_lists[i].len == 0)
 			continue;
 
@@ -85,8 +81,7 @@ inline unsigned int xpath_hash_flow(struct xpath_flow_entry *f)
 			((f->remote_ip >> 24) + 1) * \
 			(f->local_port + 1) * \
 			(f->remote_port + 1)) % XPATH_FLOW_HASH_RANGE;
-	else
-	{
+	else {
 		printk(KERN_INFO "xpath_hash_flow: NULL pointer\n");
 		return 0;
 	}
@@ -101,8 +96,7 @@ inline bool xpath_equal_flow(struct xpath_flow_entry *f1,
 		       (f1->remote_ip == f2->remote_ip) && \
 		       (f1->local_port == f2->local_port) && \
 		       (f1->remote_port == f2->remote_port);
-	else
-	{
+	else {
 		printk(KERN_INFO "xpath_equal_flow: NULL pointer\n");
 		return false;
 	}
@@ -111,26 +105,13 @@ inline bool xpath_equal_flow(struct xpath_flow_entry *f1,
 /* Initialize the info of a Flow */
 bool xpath_init_flow_info(struct xpath_flow_info *info)
 {
-	if (likely(info))
-	{
+	if (likely(info)) {
 		info->path_id = 0;
-		info->seq = 0;
-		info->ack_seq = 0;
 		info->last_tx_time = ktime_set(0, 0);
-
+		info->ack_seq = 0;
 		info->bytes_sent = 0;
-		info->bytes_rtx = 0;
-		info->timeouts = 0;
-
-		info->bytes_acked_total = 0;
-		info->bytes_acked_ecn = 0;
-		info->ecn_fraction = 0;
-		info->ecn_start_time = ktime_set(0, 0);
-
 		return true;
-	}
-	else
-	{
+	} else {
 		printk(KERN_INFO "xpath_init_flow_info: NULL pointer\n");
 		return false;
 	}
@@ -139,8 +120,7 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 /* Initialize a Flow */
 bool xpath_init_flow_entry(struct xpath_flow_entry *f)
 {
-	if (likely(f))
-	{
+	if (likely(f)) {
 		f->local_ip = 0;
 		f->remote_ip = 0;
 		f->local_port = 0;
@@ -149,9 +129,7 @@ bool xpath_init_flow_entry(struct xpath_flow_entry *f)
 		spin_lock_init(&(f->lock));
 		xpath_init_flow_info(&(f->info));
 		return true;
-	}
-	else
-	{
+	} else {
 		printk(KERN_INFO "xpath_init_flow_entry: NULL pointer\n");
 		return false;
 	}
@@ -160,15 +138,12 @@ bool xpath_init_flow_entry(struct xpath_flow_entry *f)
 /* Initialize a Flow List */
 bool xpath_init_flow_list(struct xpath_flow_list *fl)
 {
-	if (likely(fl))
-	{
+	if (likely(fl)) {
 		fl->len = 0;
 		INIT_LIST_HEAD(&(fl->head_node));
 		spin_lock_init(&(fl->lock));
 		return true;
-	}
-	else
-	{
+	} else {
 		printk(KERN_INFO "xpath_init_flow_list: NULL pointer\n");
 		return false;
 	}
@@ -180,28 +155,23 @@ bool xpath_init_flow_table(struct xpath_flow_table *ft)
 	int i = 0;
 	struct xpath_flow_list *buf = NULL;
 
-	if (unlikely(!ft))
-	{
+	if (unlikely(!ft)) {
 		printk(KERN_INFO "xpath_init_flow_table: NULL pointer\n");
 		return false;
 	}
 
 	buf = vmalloc(XPATH_FLOW_HASH_RANGE * sizeof(struct xpath_flow_list));
-	if (buf)
-	{
+	if (buf) {
 		ft->flow_lists = buf;
 		atomic_set(&(ft->size), 0);
 
-		for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++)
-		{
+		for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++) {
 			if (!xpath_init_flow_list(&(ft->flow_lists[i])))
 				return false;
 		}
 
 		return true;
-	}
-	else
-	{
+	} else {
 		printk(KERN_INFO "xpath_init_flow_table: vmalloc error\n");
 		return false;
 	}
@@ -229,8 +199,7 @@ struct xpath_flow_entry *xpath_search_flow_list(struct xpath_flow_list *fl,
 {
 	struct xpath_flow_entry *ptr = NULL;
 
-	if (unlikely(!fl || !f))
-	{
+	if (unlikely(!fl || !f)) {
 		printk(KERN_INFO "xpath_search_flow_list: NULL pointer\n");
 		return NULL;
 	}
@@ -250,8 +219,7 @@ struct xpath_flow_entry *xpath_search_flow_table(struct xpath_flow_table *ft,
 {
 	unsigned int index = 0;
 
-	if (unlikely(!ft || !f))
-	{
+	if (unlikely(!ft || !f)) {
 		printk(KERN_INFO "xpath_search_flow_table: NULL pointer\n");
 		return NULL;
 	}
@@ -268,23 +236,18 @@ bool xpath_insert_flow_list(struct xpath_flow_list *fl,
 	struct xpath_flow_entry *buf = NULL;
 	unsigned long tmp;	//variable for save current states of irq
 
-	if (unlikely(!fl || !f))
-	{
+	if (unlikely(!fl || !f)) {
 		printk(KERN_INFO "xpath_insert_flow_list: NULL pointer\n");
 		return false;
 	}
 
 	/* The flow entry exists in this Flow List */
-	if (xpath_search_flow_list(fl, f))
-	{
+	if (xpath_search_flow_list(fl, f)) {
 		printk(KERN_INFO "xpath_insert_flow_list: equal flow\n");
 		return false;
-	}
-	else
-	{
+	} else {
 		buf = kmalloc(sizeof(struct xpath_flow_entry), flags);
-		if (!buf)
-		{
+		if (!buf) {
 			printk(KERN_INFO "xpath_insert_flow_list: kmalloc error\n");
 			return false;
 		}
@@ -308,20 +271,18 @@ bool xpath_insert_flow_table(struct xpath_flow_table *ft,
 {
 	unsigned int index = 0;
 
-	if (unlikely(!ft || !f))
-	{
+	if (unlikely(!ft || !f)) {
 		printk(KERN_INFO "xpath_insert_flow_table: NULL pointer\n");
 		return false;
 	}
 
 	index = xpath_hash_flow(f);
-	if (xpath_insert_flow_list(&(ft->flow_lists[index]), f, flags))
-	{
+	if (xpath_insert_flow_list(&(ft->flow_lists[index]), f, flags)) {
 		atomic_inc(&(ft->size));
 		return true;
-	}
-	else
+	} else {
 		return false;
+	}
 }
 
 /* Delete a Flow from a Flow List and return true if the delete succeeds */
@@ -331,16 +292,13 @@ bool xpath_delete_flow_list(struct xpath_flow_list *fl,
 	struct xpath_flow_entry *ptr, *next;
 	unsigned long tmp;
 
-	if (unlikely(!fl || !f))
-	{
+	if (unlikely(!fl || !f)) {
 		printk(KERN_INFO "xpath_delete_flow_list: NULL pointer\n");
 		return false;
 	}
 
-	list_for_each_entry_safe(ptr, next, &(fl->head_node), list)
-	{
-		if (xpath_equal_flow(ptr, f))
-		{
+	list_for_each_entry_safe(ptr, next, &(fl->head_node), list) {
+		if (xpath_equal_flow(ptr, f)) {
 			spin_lock_irqsave(&(fl->lock), tmp);
 			list_del(&(ptr->list));
 			kfree(ptr);
@@ -360,8 +318,7 @@ bool xpath_delete_flow_table(struct xpath_flow_table *ft,
 	bool result = false;
 	unsigned int index = 0;
 
-	if (unlikely(!ft || !f))
-	{
+	if (unlikely(!ft || !f)) {
 		printk(KERN_INFO "xpath_delete_flow_table: NULL pointer\n");
 		return 0;
 	}
@@ -381,17 +338,14 @@ bool xpath_clear_flow_list(struct xpath_flow_list *fl)
 	struct xpath_flow_entry *ptr, *next;
 	unsigned long tmp;
 
-	if (unlikely(!fl))
-	{
+	if (unlikely(!fl)) {
 		printk(KERN_INFO "xpath_clear_flow_list: NULL pointer\n");
 		return false;
 	}
 
-	if (fl->len > 0)
-	{
+	if (fl->len > 0) {
 		spin_lock_irqsave(&(fl->lock), tmp);
-		list_for_each_entry_safe(ptr, next, &(fl->head_node), list)
-		{
+		list_for_each_entry_safe(ptr, next, &(fl->head_node), list) {
 			list_del(&(ptr->list));
 			kfree(ptr);
 			fl->len--;
@@ -407,14 +361,12 @@ bool xpath_clear_flow_table(struct xpath_flow_table *ft)
 {
 	int i = 0;
 
-	if (unlikely(!ft))
-	{
+	if (unlikely(!ft)) {
 		printk(KERN_INFO "xpath_clear_table: NULL pointer\n");
 		return false;
 	}
 
-	for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++)
-	{
+	for (i = 0; i < XPATH_FLOW_HASH_RANGE; i++) {
 		if (unlikely(!xpath_clear_flow_list(&(ft->flow_lists[i]))))
 			printk(KERN_INFO "Cannot clear flow list %d\n", i);
 	}
@@ -425,11 +377,10 @@ bool xpath_clear_flow_table(struct xpath_flow_table *ft)
 
 bool xpath_exit_flow_table(struct xpath_flow_table *ft)
 {
-	if (likely(xpath_clear_flow_table(ft)))
-	{
+	if (likely(xpath_clear_flow_table(ft))) {
 		vfree(ft->flow_lists);
 		return true;
-	}
-	else
+	} else {
 		return false;
+	}
 }

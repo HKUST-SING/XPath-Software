@@ -10,19 +10,9 @@
 struct xpath_flow_info
 {
         u16 path_id;    //current path ID (not path IP address)
-        u32 seq;        //update for every TX packet
-        u32 ack_seq;    //update for every RX packet
         ktime_t last_tx_time;   //last time when we observe a sent packet
-
-        /* following variables are only reset when we change the path */
+        u32 ack_seq;    //update for every RX packet
         u32 bytes_sent; //bytes sent in current path
-        u32 bytes_rtx;  //bytes retransmiited in current path
-        u16 timeouts;   //# of timeouts in current path
-
-        u32 bytes_acked_total;  //bytes acknowledged by the remote side
-        u32 bytes_acked_ecn;    //bytes get ECN marked
-        u32 ecn_fraction;       //fraction of ECN marked packets
-        ktime_t ecn_start_time;   //when we start ECN measurement cycle
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */

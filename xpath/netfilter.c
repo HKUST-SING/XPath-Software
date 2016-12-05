@@ -8,7 +8,7 @@
 
 #include "netfilter.h"
 #include "flow_table.h"
-#include "xpath_table.h"
+#include "path_table.h"
 #include "net_util.h"
 #include "params.h"
 
@@ -91,35 +91,25 @@ static u32 presto_routing(const struct sk_buff *skb,
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
         f.info.path_id = path_id;
 
-        if (tcph->syn)
-        {
+        if (tcph->syn) {
                 /* insert a new flow entry to the flow table */
-                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
-                {
+                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: insert flow fails\n");
                 }
-        }
-        else if (tcph->fin || tcph->rst)
-        {
-                if (!xpath_delete_flow_table(&ft, &f))
-                {
+        } else if (tcph->fin || tcph->rst) {
+                if (!xpath_delete_flow_table(&ft, &f)) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: delete flow fails\n");
                 }
-        }
-        else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
-        {
+        } else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
                 path_id = flow_ptr->info.path_id;
-                if (flow_ptr->info.bytes_sent + payload_len > xpath_flowcell_thresh)
-                {
+                if (flow_ptr->info.bytes_sent + payload_len > xpath_flowcell_thresh) {
                         flow_ptr->info.bytes_sent = payload_len;
                         if (++path_id >= path_ptr->num_paths)
                                 path_id -= path_ptr->num_paths;
                         flow_ptr->info.path_id = path_id;
-                }
-                else
-                {
+                } else {
                         flow_ptr->info.bytes_sent += payload_len;
                 }
         }
@@ -151,8 +141,7 @@ static u32 flowbender_routing(const struct sk_buff *skb,
         /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
         u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
-        if (likely(ca))
-        {
+        if (likely(ca)) {
                 path_id = (path_id + ca->reroute) % path_ptr->num_paths;
                 if (xpath_enable_debug)
                         printk(KERN_INFO "Reroute %hu\n", ca->reroute);
@@ -165,9 +154,8 @@ static u32 flowbender_routing(const struct sk_buff *skb,
 static u32 tlb_routing(const struct sk_buff *skb,
 		       struct xpath_path_entry *path_ptr)
 {
-	u64 ecn_fraction;
 	unsigned long tmp;
-	ktime_t start_time, now = ktime_get();
+	ktime_t now = ktime_get();
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
 	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
@@ -183,61 +171,20 @@ static u32 tlb_routing(const struct sk_buff *skb,
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
 	f.info.path_id = path_id;
 
-	if (tcph->syn)
-	{
-		f.info.seq = ntohl(tcph->seq);
-		f.info.last_tx_time = ktime_get();
+	if (tcph->syn) {
+		f.info.last_tx_time = now;
 
                 /* insert a new flow entry to the flow table */
-                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC)))
-                {
+                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: insert flow fails\n");
                 }
-	}
-	else if (tcph->fin || tcph->rst)
-	{
-		if (!xpath_delete_flow_table(&ft, &f))
-		{
+	} else if (tcph->fin || tcph->rst) {
+		if (!xpath_delete_flow_table(&ft, &f)) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: delete flow fails\n");
 		}
-	}
-	else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f)))
-	{
-		start_time = flow_ptr->info.ecn_start_time;
-		/* not yet start a ECN measurement cycle */
-		if (start_time.tv64 == 0)
-			goto out;
-
-		/* cannot finish current ECN measurement cycle */
-		if (ktime_us_delta(now, start_time) < xpath_tlb_ecn_sample_us ||
-		    flow_ptr->info.bytes_acked_total < xpath_tlb_ecn_sample_bytes)
-		    	goto out;
-
-		ecn_fraction = flow_ptr->info.bytes_acked_ecn << 10;
-		do_div(ecn_fraction, max(1U, flow_ptr->info.bytes_acked_total));
-		flow_ptr->info.ecn_fraction = min((u32)ecn_fraction, 1024U);
-
-		spin_lock_irqsave(&(flow_ptr->lock), tmp);
-		flow_ptr->info.bytes_acked_ecn = 0;
-		flow_ptr->info.bytes_acked_total = 0;
-		spin_unlock_irqrestore(&(flow_ptr->lock), tmp);
-
-		/* trigger next measurement cycle */
-		flow_ptr->info.ecn_start_time = ktime_set(0, 0);
-
-		/* reset measurement results */
-		if (xpath_enable_debug)
-			printk(KERN_INFO "ECN fraction %u\n", flow_ptr->info.ecn_fraction);
-
-		if (flow_ptr->info.ecn_fraction < xpath_tlb_ecn_fraction)
-			goto out;
-
-		path_id = flow_ptr->info.path_id;
-		if (++path_id >= path_ptr->num_paths)
-			path_id -= path_ptr->num_paths;
-		flow_ptr->info.path_id = path_id;
+	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 	}
 
 out:
@@ -257,23 +204,23 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
         struct tcphdr *tcph;
         struct xpath_path_entry *path_ptr = NULL;
         u32 path_ip = 0;    /* IP address of the path */
+	u32 payload_len = 0;	/* tcp payload length */
 
         if (likely(out) && param_dev && strncmp(out->name, param_dev, IFNAMSIZ) != 0)
                 return NF_ACCEPT;
 
         /* we only filter TCP packets */
-        if (likely(iph) && iph->protocol == IPPROTO_TCP)
-        {
+        if (likely(iph) && iph->protocol == IPPROTO_TCP) {
                 tcph = tcp_hdr(skb);
                 if (param_port != 0 &&
                     ntohs(tcph->source) != param_port &&
                     ntohs(tcph->dest) != param_port)
                         return NF_ACCEPT;
 
+		payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
                 path_ptr = xpath_search_path_table(&pt, iph->daddr);
                 /* cannot find path information */
-                if (unlikely(!path_ptr || path_ptr->num_paths == 0))
-                {
+                if (unlikely(!path_ptr || path_ptr->num_paths == 0)) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: cannot find path\n");
 
@@ -282,8 +229,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 
                 /* Reduce MSS value in SYN packets */
                 if (tcph->syn &&
-                    unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr))))
-                {
+                    unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr)))) {
                         if (xpath_enable_debug)
                                 printk(KERN_INFO "XPath: cannot modify MSS\n");
 
@@ -291,8 +237,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                 }
 
 
-		switch (xpath_load_balancing)
-		{
+		switch (xpath_load_balancing) {
 			case ECMP:
 				path_ip = ecmp_routing(skb, path_ptr);
 				break;
@@ -314,8 +259,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 		}
 
                 /* construct tunnel (outer) IP header */
-		if (likely(path_ip > 0))
-		{
+		if (likely(path_ip > 0)) {
                         tiph.version = 4;
                         tiph.ihl = sizeof(struct iphdr) >> 2;
                         tiph.tot_len =  htons(ntohs(iph->tot_len) + \
@@ -328,15 +272,17 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                         tiph.saddr = iph->saddr;
                         tiph.ttl = iph->ttl;
 
+			/* high priority for control packets */
+			if (payload_len == 0)
+				tiph.tos = HIGH_PRIO_DSCP << 2;
+
                         /* ECN capable (to avoid switch bug) */
                         if (!INET_ECN_is_capable(tiph.tos))
                                 tiph.tos |= INET_ECN_ECT_0;
 
                         tiph.check = 0;
                         tiph.check = ip_fast_csum(&tiph, tiph.ihl);
-                }
-		else
-		{
+                } else {
 			if (xpath_enable_debug)
 				printk(KERN_INFO "Xpath: invalid path IP\n");
 
@@ -344,8 +290,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 		}
 
                 /* add tunnel (outer) IP header */
-                if (unlikely(!xpath_ipip_encap(skb, &tiph, out)))
-                {
+                if (unlikely(!xpath_ipip_encap(skb, &tiph, out))) {
 			if (xpath_enable_debug)
                         	printk(KERN_INFO "XPath: cannot add IP header\n");
 
@@ -375,8 +320,7 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	if (unlikely(!iph) || iph->protocol != IPPROTO_IPIP)
 		goto out;
 
-	if (unlikely(!xpath_ipip_decap(skb)))
-	{
+	if (unlikely(!xpath_ipip_decap(skb))) {
 		printk(KERN_INFO "XPath: cannot remove IP header\n");
 		goto out;
 	}
@@ -402,25 +346,12 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	if (unlikely(flow_ptr->info.ack_seq == 0))
 		flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
 
-	/* start a ECN measurement cycle */
-	if (flow_ptr->info.ecn_start_time.tv64 == 0)
-		flow_ptr->info.ecn_start_time = ktime_get();
-
 	if (unlikely(!seq_after(ntohl(tcph->ack_seq), flow_ptr->info.ack_seq)))
 		goto out;
 
 	/* get ACK data in bytes */
 	bytes_acked = ntohl(tcph->ack_seq) - flow_ptr->info.ack_seq;
-	flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
 
-	spin_lock_irqsave(&(flow_ptr->lock), tmp);
-	flow_ptr->info.bytes_acked_total += bytes_acked;
-	if (tcph->ece)
-		flow_ptr->info.bytes_acked_ecn += bytes_acked;
-	spin_unlock_irqrestore(&(flow_ptr->lock), tmp);
-
-	//if (xpath_enable_debug)
-	//	printk(KERN_INFO "Bytes ACKed %u\n", bytes_acked);
 out:
         return NF_ACCEPT;
 }
@@ -434,8 +365,7 @@ bool xpath_netfilter_init(void)
         xpath_nf_hook_out.pf = PF_INET;
         xpath_nf_hook_out.priority = NF_IP_PRI_FIRST;
 
-        if (unlikely(nf_register_hook(&xpath_nf_hook_out)))
-        {
+        if (unlikely(nf_register_hook(&xpath_nf_hook_out))) {
                 printk(KERN_INFO "XPath: cannot register TX Netfilter hook\n");
                 return false;
         }
@@ -446,8 +376,7 @@ bool xpath_netfilter_init(void)
         xpath_nf_hook_in.pf = PF_INET;
         xpath_nf_hook_in.priority = NF_IP_PRI_FIRST;
 
-        if (unlikely(nf_register_hook(&xpath_nf_hook_in)))
-        {
+        if (unlikely(nf_register_hook(&xpath_nf_hook_in))) {
                 printk(KERN_INFO "XPath: cannot register RX Netfilter hook\n");
                 return false;
         }

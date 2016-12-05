@@ -22,10 +22,10 @@ void print_usage(char *program)
         }
 
         printf("Usage: %s [option]\n", program);
-        printf("%s [dest] [path ID1] [path IP1] .. insert a new path entry to path table\n", OP_STR_INSERT);
-        printf("%s                                 print path table\n", OP_STR_PRINT);
-        printf("%s                                 clear all path entries in the table\n", OP_STR_CLEAR);
-        printf("%s                                 display help information\n", OP_STR_HELP);
+        printf("%s [dest] [path ID 1] [path IP 1] .. insert a new path entry to path table\n", OP_STR_INSERT);
+        printf("%s                                   print path table\n", OP_STR_PRINT);
+        printf("%s                                   clear all path entries in the table\n", OP_STR_CLEAR);
+        printf("%s                                   display help information\n", OP_STR_HELP);
 }
 
 int main(int argc, char **argv)
@@ -61,9 +61,9 @@ int main(int argc, char **argv)
         nlh->nlmsg_flags = 0;
         nlh->nlmsg_type = 0;
 
-        //[program] [OP_STR_INSERT] [dst] [path ID 1] [path IP 1] ....
-        if (argc >= 5 && (argc - 3) % 2 == 0 && strcmp(argv[1], OP_STR_INSERT) == 0) {
-                // msg format : num_paths, dest IP, path ID 0, path IP 0, ..
+        //insert message: [program] [OP_STR_INSERT] [dst] [path ID 1] [path IP 1] ....
+        if (argc >= 5 && (argc - 3) % 2 == 0 && strcmp(argv[1], OP_STR_INSERT) == 0 ) {
+                // msg format : num_paths, dest IP, path ID 1, path IP 1, ..
                 num_paths = (argc - 3) / 2;
                 sprintf(formatted_msg, "%u%c", num_paths, SEP);
 
@@ -100,9 +100,12 @@ int main(int argc, char **argv)
                 nlh->nlmsg_type = OP_INSERT;
                 //printf("%s\n", formatted_msg);
 
-        } else if ((argc == 2) && (strcmp(argv[1], OP_STR_PRINT) == 0)) {
+        //print message: [program] [OP_STR_PRINT]
+        } else if (argc == 2 && strcmp(argv[1], OP_STR_PRINT) == 0) {
                 nlh->nlmsg_type = OP_PRINT;
-        } else if ((argc == 2) && (strcmp(argv[1], OP_STR_CLEAR) == 0)) {
+
+        //clear message: [program] [OP_STR_CLEAR]
+        } else if (argc == 2 && strcmp(argv[1], OP_STR_CLEAR) == 0) {
                 nlh->nlmsg_type = OP_CLEAR;
         } else {
                 printf("[ERROR] Invalid options\n");

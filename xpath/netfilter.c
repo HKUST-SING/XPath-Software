@@ -187,9 +187,27 @@ static u32 tlb_routing(const struct sk_buff *skb,
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 	}
 
-out:
 	/* Get path IP from path ID */
 	return path_ptr->path_ips[path_id];
+}
+
+/* add ECT and modify DSCP for IP header */
+static void modify_ip_header(struct iphdr *iph, u32 payload_len)
+{
+	if (unlikely(!iph))
+		return;
+
+	/* high priority for pure ACK packets */
+	if (xpath_ack_prio == 1 && payload_len == 0)
+		iph->tos = HIGH_PRIO_DSCP << 2;
+
+	/* ECN capable (to avoid switch bug) */
+	if (!INET_ECN_is_capable(iph->tos))
+		iph->tos |= INET_ECN_ECT_0;
+
+	/* calculate IP header checksum */
+	iph->check = 0;
+	iph->check = ip_fast_csum(iph, iph->ihl);
 }
 
 /* Hook function for outgoing packets */
@@ -219,13 +237,12 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 
 		payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
                 path_ptr = xpath_search_path_table(&pt, iph->daddr);
+
                 /* cannot find path information */
                 if (unlikely(!path_ptr || path_ptr->num_paths == 0)) {
-                        if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: cannot find path\n");
-
-                        return NF_DROP;
-                }
+			modify_ip_header(iph, payload_len);
+			return NF_ACCEPT;
+		}
 
                 /* Reduce MSS value in SYN packets */
                 if (tcph->syn &&
@@ -258,7 +275,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                                                  xpath_load_balancing);
 		}
 
-                /* construct tunnel (outer) IP header */
+                /* find path IP, then construct tunnel (outer) IP header */
 		if (likely(path_ip > 0)) {
                         tiph.version = 4;
                         tiph.ihl = sizeof(struct iphdr) >> 2;
@@ -271,29 +288,18 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                         tiph.daddr = path_ip;
                         tiph.saddr = iph->saddr;
                         tiph.ttl = iph->ttl;
+			modify_ip_header(&tiph, payload_len);
 
-			/* high priority for control packets */
-			if (payload_len == 0)
-				tiph.tos = HIGH_PRIO_DSCP << 2;
-
-                        /* ECN capable (to avoid switch bug) */
-                        if (!INET_ECN_is_capable(tiph.tos))
-                                tiph.tos |= INET_ECN_ECT_0;
-
-                        tiph.check = 0;
-                        tiph.check = ip_fast_csum(&tiph, tiph.ihl);
+		/* cannot find path IP */
                 } else {
-			if (xpath_enable_debug)
-				printk(KERN_INFO "Xpath: invalid path IP\n");
-
-			return NF_DROP;
+			modify_ip_header(iph, payload_len);
+			return NF_ACCEPT;
 		}
 
                 /* add tunnel (outer) IP header */
-                if (unlikely(!xpath_ipip_encap(skb, &tiph, out))) {
+		if (unlikely(!xpath_ipip_encap(skb, &tiph, out))) {
 			if (xpath_enable_debug)
                         	printk(KERN_INFO "XPath: cannot add IP header\n");
-
 			return NF_DROP;
 		}
 	}

@@ -9,9 +9,10 @@ int xpath_flowcell_thresh = 65536;
 int xpath_tlb_ecn_fraction = 205;
 int xpath_tlb_ecn_sample_us = 800;
 int xpath_tlb_ecn_sample_bytes = 10240;	//10KB by default
+int xpath_ack_prio = 1;	//enable by default
 
-int xpath_params_min[NUM_PARAMS] = {ECMP, 0, 0, 0, 0, 0};
-int xpath_params_max[NUM_PARAMS] = {TLB, 1, 104857600, 1024, 10000, 1 << 20};
+int xpath_params_min[NUM_PARAMS] = {ECMP, 0, 0, 0, 0, 0, 0};
+int xpath_params_max[NUM_PARAMS] = {TLB, 1, 104857600, 1024, 10000, 1 << 20, 1};
 
 struct xpath_param xpath_params[NUM_PARAMS] =
 {
@@ -21,6 +22,7 @@ struct xpath_param xpath_params[NUM_PARAMS] =
 	{"tlb_ecn_fraction", &xpath_tlb_ecn_fraction},
 	{"tlb_ecn_sample_us", &xpath_tlb_ecn_sample_us},
 	{"tlb_ecn_sample_bytes", &xpath_tlb_ecn_sample_bytes},
+	{"ack_prio", &xpath_ack_prio},
 };
 
 struct ctl_table xpath_params_table[NUM_PARAMS];

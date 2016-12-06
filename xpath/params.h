@@ -21,7 +21,7 @@
 /* Our solution: TLB */
 #define TLB 4
 
-#define NUM_PARAMS 6
+#define NUM_PARAMS 7
 
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;
@@ -35,6 +35,8 @@ extern int xpath_tlb_ecn_fraction;
 extern int xpath_tlb_ecn_sample_us;
 /* TLB ECN minimum sample bytes */
 extern int xpath_tlb_ecn_sample_bytes;
+/* whether enable reverse ACK prioritization */
+extern int xpath_ack_prio;
 
 struct xpath_param
 {

@@ -27,7 +27,7 @@ void xpath_print_flow_entry(struct xpath_flow_entry *f, char *operation)
 				 remote_ip,
 				 f->remote_port);
 	else
-		printk(KERN_INFO "XPath: flow (%s:%hu to %s:%hu\n",
+		printk(KERN_INFO "XPath: flow (%s:%hu to %s:%hu)\n",
 				 local_ip,
 				 f->local_port,
 				 remote_ip,

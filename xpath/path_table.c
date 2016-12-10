@@ -91,12 +91,9 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         }
 
         //initialize
-        for (i = 0; i < 2 * num_paths; i++) {
-                if (i % 2 == 0) {       //path ID
-                        new_path_ids[i / 2] = paths[i];
-                } else {        //path IP
-                        new_path_ips[i / 2] = paths[i];
-                }
+        for (i = 0; i < num_paths; i++) {
+                new_path_ids[i] = paths[i << 1];        //path ID
+                new_path_ips[i] = paths[(i << 1) + 1];    //path IP
         }
 
         /* insert a new entry */

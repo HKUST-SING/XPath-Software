@@ -4,6 +4,7 @@
 #include <linux/spinlock.h>
 #include <linux/ktime.h>
 
+/* A path group consists of multiple paths from the same server to the same ToR switch */
 struct path_group_entry {
         /* ECN information */
         u16 avg_ecn_fraction;   //average ECN fraction of all flows (maximum 1024)

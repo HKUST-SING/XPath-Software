@@ -10,7 +10,7 @@ struct xpath_path_entry
         unsigned int daddr;     //destination IP address (key)
         unsigned int num_paths;
         unsigned int *path_ips; //path IP addresses
-        unsigned int *path_ids; //path group IDs, map path entry to a path group
+        unsigned int *path_group_ids; //path group IDs, map path entry to a path group
         atomic_t current_path;  //for per-packet loac balancing
 };
 

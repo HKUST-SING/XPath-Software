@@ -65,7 +65,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         unsigned int index, i;
         struct xpath_path_entry *entry = NULL;
         struct hlist_node *ptr = NULL;
-        unsigned int *new_path_ips = NULL, *new_path_ids = NULL;
+        unsigned int *new_path_ips = NULL, *new_path_group_ids = NULL;
 
         if (unlikely(!pt || !paths || num_paths == 0))
                 return false;
@@ -81,19 +81,19 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
 
         entry = vmalloc(sizeof(struct xpath_path_entry));
         new_path_ips = vmalloc(sizeof(unsigned int) * num_paths);
-        new_path_ids = vmalloc(sizeof(unsigned int) * num_paths);
+        new_path_group_ids = vmalloc(sizeof(unsigned int) * num_paths);
 
-        if (unlikely(!entry || !new_path_ips || !new_path_ids)) {
+        if (unlikely(!entry || !new_path_ips || !new_path_group_ids)) {
                 vfree(entry);
                 vfree(new_path_ips);
-                vfree(new_path_ids);
+                vfree(new_path_group_ids);
                 return false;
         }
 
         //initialize
         for (i = 0; i < num_paths; i++) {
-                new_path_ids[i] = paths[i << 1];        //path ID
-                new_path_ips[i] = paths[(i << 1) + 1];    //path IP
+                new_path_group_ids[i] = paths[i << 1];  //path group ID
+                new_path_ips[i] = paths[(i << 1) + 1];  //path IP
         }
 
         /* insert a new entry */
@@ -101,7 +101,7 @@ bool xpath_insert_path_table(struct xpath_path_table *pt,
         entry->daddr = daddr;
         entry->num_paths = num_paths;
         entry->path_ips = new_path_ips;
-        entry->path_ids = new_path_ids;
+        entry->path_group_ids = new_path_group_ids;
         atomic_set(&entry->current_path, 0);
         hlist_add_head(&entry->hlist, &pt->lists[index]);
         return true;
@@ -121,7 +121,7 @@ bool xpath_clear_path_table(struct xpath_path_table *pt)
             hlist_for_each_entry_safe(entry, ptr, &pt->lists[i], hlist) {
                     hlist_del(&entry->hlist);
                     vfree(entry->path_ips);
-                    vfree(entry->path_ids);
+                    vfree(entry->path_group_ids);
                     vfree(entry);
             }
         }
@@ -179,7 +179,7 @@ void xpath_print_path_entry(struct xpath_path_entry *entry)
 
         for (i = 0; i < entry->num_paths; i++) {
                 snprintf(ip, 16, "%pI4", &(entry->path_ips[i]));
-                printk(KERN_INFO "      %s (%d) \n", ip, entry->path_ids[i]);
+                printk(KERN_INFO "      %s (%d) \n", ip, entry->path_group_ids[i]);
         }
 }
 

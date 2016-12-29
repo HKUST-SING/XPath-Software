@@ -89,7 +89,7 @@ static u32 presto_routing(const struct sk_buff *skb,
 
         xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-        f.info.path_id = path_id;
+        f.info.path_group_id = path_id;
 
         if (tcph->syn) {
                 /* insert a new flow entry to the flow table */
@@ -103,12 +103,12 @@ static u32 presto_routing(const struct sk_buff *skb,
                                 printk(KERN_INFO "XPath: delete flow fails\n");
                 }
         } else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
-                path_id = flow_ptr->info.path_id;
+                path_id = flow_ptr->info.path_group_id;
                 if (flow_ptr->info.bytes_sent + payload_len > xpath_flowcell_thresh) {
                         flow_ptr->info.bytes_sent = payload_len;
                         if (++path_id >= path_ptr->num_paths)
                                 path_id -= path_ptr->num_paths;
-                        flow_ptr->info.path_id = path_id;
+                        flow_ptr->info.path_group_id = path_id;
                 } else {
                         flow_ptr->info.bytes_sent += payload_len;
                 }
@@ -169,7 +169,7 @@ static u32 tlb_routing(const struct sk_buff *skb,
 
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-	f.info.path_id = path_id;
+	f.info.path_group_id = path_id;
 
 	if (tcph->syn) {
 		f.info.last_tx_time = now;

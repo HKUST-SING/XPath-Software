@@ -9,10 +9,21 @@
 
 struct xpath_flow_info
 {
-        u16 path_id;    //current path ID (not path IP address)
+        u16 path_group_id;      //current path group ID (not path IP address)
         ktime_t last_tx_time;   //last time when we observe a sent packet
-        u32 ack_seq;    //update for every RX packet
+
+        u32 seq_prev_path;      //largest seq sent in previous path
+        u32 seq_curr_path;      //largest seq sent in current path
+        u32 ack_seq;    //latest ACK seq number
+
         u32 bytes_sent; //bytes sent in current path
+        u32 bytes_acked;        //bytes ACKed in current path
+        u32 bytes_ecn;  //bytes that get ECN marked in current path
+        u16 ecn_fraction;       //ECN fraction in current path
+
+        u16 rate_mbps;   //sending rate in Mbps
+        u32 bytes_sent_cycle;        //bytes sent in current rate measurement cycle
+        ktime_t cycle_start_time;       //start time of current rate measurement cycle
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */

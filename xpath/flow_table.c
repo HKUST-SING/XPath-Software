@@ -106,10 +106,21 @@ inline bool xpath_equal_flow(struct xpath_flow_entry *f1,
 bool xpath_init_flow_info(struct xpath_flow_info *info)
 {
 	if (likely(info)) {
-		info->path_id = 0;
+		info->path_group_id = 0;
 		info->last_tx_time = ktime_set(0, 0);
+
+		info->seq_prev_path = 0;
+		info->seq_curr_path = 0;
 		info->ack_seq = 0;
+
 		info->bytes_sent = 0;
+		info->bytes_acked = 0;
+		info->bytes_ecn = 0;
+		info->ecn_fraction = 0;
+
+		info->rate_mbps = 0;
+		info->bytes_sent_cycle = 0;
+		info->cycle_start_time = ktime_set(0, 0);
 		return true;
 	} else {
 		printk(KERN_INFO "xpath_init_flow_info: NULL pointer\n");

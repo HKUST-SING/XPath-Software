@@ -1,6 +1,6 @@
 #include "path_group.h"
 
-bool xpath_init_path_group(struct path_group_entry *pg, unsigned int size)
+bool xpath_init_path_group(struct xpath_group_entry *pg, unsigned int size)
 {
         int i;
 

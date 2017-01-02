@@ -5,7 +5,7 @@
 #include <linux/ktime.h>
 
 /* A path group consists of multiple paths from the same server to the same ToR switch */
-struct path_group_entry {
+struct xpath_group_entry {
         /* ECN information */
         u16 ecn_fraction;       //ECN fraction of all flows (maximum 1024)
         u32 bytes_acked;        //bytes ACKed in this path group
@@ -24,6 +24,6 @@ struct path_group_entry {
         spinlock_t lock;
 };
 
-bool xpath_init_path_group(struct path_group_entry *pg, unsigned int size);
+bool xpath_init_path_group(struct xpath_group_entry *pg, unsigned int size);
 
 #endif

@@ -22,7 +22,7 @@ struct xpath_flow_table ft;
 /* Path Table */
 struct xpath_path_table pt;
 /* Path Group */
-struct path_group_entry pg[XPATH_PATH_GROUP_SIZE];
+struct xpath_group_entry pg[XPATH_PATH_GROUP_SIZE];
 
 /*
  * The following two functions are related to param_table_operation

@@ -1,5 +1,5 @@
 obj-m += xpath.o
-xpath-y := params.o path_group.o path_table.o flow_table.o net_util.o netlink.o netfilter.o main.o
+xpath-y := params.o path_group.o path_table.o flow_table.o net_util.o netlink.o netfilter.o routing.o main.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules

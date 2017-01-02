@@ -2,6 +2,7 @@
 
 #include <linux/tcp.h>
 #include <net/ip_tunnels.h>
+#include "params.h"
 
 static const int CRC_HASH_TABLE[256] = {
     0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5, 0x60c6, 0x70e7,
@@ -38,6 +39,25 @@ static const int CRC_HASH_TABLE[256] = {
     0x6e17, 0x7e36, 0x4e55, 0x5e74, 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0
 };
 
+/* add ECT and modify DSCP for IP header */
+void xpath_modify_ip_header(struct iphdr *iph, u32 payload_len)
+{
+	if (unlikely(!iph))
+		return;
+
+	/* high priority for pure ACK packets */
+	if (xpath_ack_prio == 1 && payload_len == 0)
+		iph->tos = HIGH_PRIO_DSCP << 2;
+
+	/* ECN capable (to avoid switch bug) */
+	if (!INET_ECN_is_capable(iph->tos))
+		iph->tos |= INET_ECN_ECT_0;
+
+	/* calculate IP header checksum */
+	iph->check = 0;
+	iph->check = ip_fast_csum(iph, iph->ihl);
+}
+
 /**
  *  Modify TCP MSS option in SYN packets.
  *  @reduce_size: size to reduce for maximum sergment
@@ -61,11 +81,9 @@ bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
         if (unlikely(skb_linearize(skb) != 0))
                 return result;
 
-        while (1)
-        {
+        while (1) {
                 /* TCP option kind: MSS (2) */
-                if (*ptr == 2)
-                {
+                if (*ptr == 2) {
                         mss = ntohs(*((unsigned short int*)(ptr + 2)));
                         mss = mss - reduce_size;
                         *(unsigned short int*)(ptr + 2) = htons(mss);
@@ -88,8 +106,7 @@ bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size)
                         ptr += offset;
         }
 
-        if (likely(result))
-        {
+        if (likely(result)) {
                 tcph->check = 0;
                 tcph->check = csum_tcpudp_magic(iph->saddr,
                                                 iph->daddr,
@@ -118,10 +135,8 @@ bool xpath_ipip_encap(struct sk_buff *skb,
         unsigned int headroom = sizeof(struct iphdr) + LL_RESERVED_SPACE(out);
 
         /* if we don't have enough headroom */
-        if (skb_headroom(skb) < headroom)
-        {
-                if (unlikely(skb_cow_head(skb, headroom - skb_headroom(skb))))
-                {
+        if (skb_headroom(skb) < headroom) {
+                if (unlikely(skb_cow_head(skb, headroom - skb_headroom(skb)))) {
                         printk(KERN_INFO "Unable to expand sk_buff\n");
                         return false;
                 }
@@ -146,8 +161,7 @@ bool xpath_ipip_decap(struct sk_buff *skb)
         u8 out_tos;
 
         /* We only decap IPIP packets */
-        if (likely(iph && iph->protocol == IPPROTO_IPIP))
-        {
+        if (likely(iph && iph->protocol == IPPROTO_IPIP)) {
                 out_tos = iph->tos;
                 skb_pull(skb, iph->ihl<<2);
                 skb_reset_network_header(skb);
@@ -156,8 +170,7 @@ bool xpath_ipip_decap(struct sk_buff *skb)
                 /* Get the inner IP header */
                 iph = ip_hdr(skb);
                 /* We should update ToS of the inner IP header */
-                if (out_tos != iph->tos)
-                {
+                if (out_tos != iph->tos) {
                         iph->tos = out_tos;
                         /* Update the checksum of the inner IP header */
                         iph->check = 0;
@@ -165,9 +178,7 @@ bool xpath_ipip_decap(struct sk_buff *skb)
                 }
 
                 return true;
-        }
-        else
-        {
+        } else {
                 return false;
         }
 }
@@ -184,8 +195,7 @@ unsigned short xpath_flow_hash_crc16(unsigned int local_ip,
         unsigned int num_bytes = 12;
         unsigned short crc = 0;
 
-        while (num_bytes--)
-        {
+        while (num_bytes--) {
                 crc = (crc << 8) ^ CRC_HASH_TABLE[(crc >> 8) ^ (*byte_ptr)];
                 byte_ptr++;
         }

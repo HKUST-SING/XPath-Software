@@ -8,7 +8,7 @@ struct xpath_path_entry
 {
         struct hlist_node hlist;
         unsigned int daddr;     //destination IP address (key)
-        unsigned int num_paths;
+        unsigned int num_paths; //number of paths in total
         unsigned int *path_ips; //path IP addresses
         unsigned int *path_group_ids; //path group IDs, map path entry to a path group
         atomic_t current_path;  //for per-packet loac balancing

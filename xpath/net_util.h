@@ -6,6 +6,9 @@
 #include <linux/ip.h>
 #include <linux/netdevice.h>
 
+/* add ECT and modify DSCP for IP header */
+void xpath_modify_ip_header(struct iphdr *iph, u32 payload_len);
+
 /* Modify TCP MSS option in SYN packets */
 bool xpath_reduce_tcp_mss(struct sk_buff *skb, unsigned short int reduce_size);
 

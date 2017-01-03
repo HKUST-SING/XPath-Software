@@ -106,7 +106,7 @@ inline bool xpath_equal_flow(struct xpath_flow_entry *f1,
 bool xpath_init_flow_info(struct xpath_flow_info *info)
 {
 	if (likely(info)) {
-		info->path_group_id = 0;
+		info->path_index = 0;
 		info->last_tx_time = ktime_set(0, 0);
 
 		info->seq_prev_path = 0;

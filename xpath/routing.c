@@ -40,10 +40,10 @@ u32 ecmp_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 					     iph->daddr,
 					     tcph->source,
 					     tcph->dest);
-        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
-        /* Get path IP from path ID */
-        return path_ptr->path_ips[path_id];
+        /* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+        u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        /* Get path IP based on path index */
+        return path_ptr->path_ips[path_index];
 }
 
 u32 presto_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
@@ -55,13 +55,13 @@ u32 presto_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 		                             iph->daddr,
 					     tcph->source,
                                              tcph->dest);
-        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        /* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+        u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
 
         xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-        f.info.path_group_id = path_id;
+        f.info.path_index = path_index;
 
         if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
                 if (xpath_enable_debug)
@@ -72,28 +72,34 @@ u32 presto_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
                         printk(KERN_INFO "XPath: delete flow fails\n");
 
         } else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
-                path_id = flow_ptr->info.path_group_id;
+                path_index = flow_ptr->info.path_index;
+		/* exceed flowcell threshold */
                 if (flow_ptr->info.bytes_sent + payload_len > xpath_flowcell_thresh) {
                         flow_ptr->info.bytes_sent = payload_len;
-                        if (++path_id >= path_ptr->num_paths)
-                                path_id -= path_ptr->num_paths;
-                        flow_ptr->info.path_group_id = path_id;
+                        if (++path_index >= path_ptr->num_paths)
+                                path_index -= path_ptr->num_paths;
+                        flow_ptr->info.path_index = path_index;
                 } else {
                         flow_ptr->info.bytes_sent += payload_len;
                 }
         }
 
-        /* Get path IP from path ID */
-        return path_ptr->path_ips[path_id];
+        /* Get path IP based on path index */
+        return path_ptr->path_ips[path_index];
 }
 
 u32 rps_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-        unsigned int path_id = (unsigned int)atomic_inc_return(&path_ptr->current_path);
-        path_id = path_id % path_ptr->num_paths;
+        u32 path_index = (u32)atomic_inc_return(&path_ptr->current_path);
 
-        /* Get path IP from path ID */
-        return path_ptr->path_ips[path_id];
+	if (likely(path_ptr->num_paths > 0)) {
+        	path_index = path_index % path_ptr->num_paths;
+	} else {
+		path_index = 0;
+	}
+
+        /* Get path IP based on path index */
+        return path_ptr->path_ips[path_index];
 }
 
 u32 flowbender_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
@@ -105,17 +111,17 @@ u32 flowbender_routing(const struct sk_buff *skb, struct xpath_path_entry *path_
 		                             iph->daddr,
 					     tcph->source,
                                              tcph->dest);
-        /* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-        u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+        /* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+        u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
-        if (likely(ca)) {
-                path_id = (path_id + ca->reroute) % path_ptr->num_paths;
+        if (likely(ca && path_ptr->num_paths > 0)) {
+                path_index = (path_index + ca->reroute) % path_ptr->num_paths;
                 if (xpath_enable_debug)
                         printk(KERN_INFO "Reroute %hu\n", ca->reroute);
         }
 
-        /* Get path IP from path ID */
-        return path_ptr->path_ips[path_id];
+        /* Get path IP based on path index */
+        return path_ptr->path_ips[path_index];
 }
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
@@ -129,13 +135,13 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 					     iph->daddr,
 					     tcph->source,
 					     tcph->dest);
-	/* hash_key_space = 1 << 16; path_id = hash_key * path_ptr->num_paths / region_size; */
-	u32 path_id = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+	/* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
 
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-	f.info.path_group_id = path_id;
+	f.info.path_index = path_index;
 
 	if (tcph->syn) {
 		f.info.last_tx_time = now;
@@ -152,6 +158,21 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 	}
 
-	/* Get path IP from path ID */
-	return path_ptr->path_ips[path_id];
+	/* Get path IP based on path index */
+	return path_ptr->path_ips[path_index];
 }
+
+/*
+ * where_to_route() of tlb load balancing algorithm
+ * return desired path index
+ */
+//static u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
+//{
+//        u16 i, path_index = current_path_index;
+
+        /* select a good path */
+
+        /* select a gray path */
+//out:
+//        return path_index;
+//}

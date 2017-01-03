@@ -4,19 +4,27 @@
 #include <linux/types.h>
 #include <linux/list.h>
 
+/* Some paths from the same source host to the same destination host */
 struct xpath_path_entry
 {
+        unsigned int daddr;     /* destination host IP address (key of this struct) */
+        unsigned int num_paths; /* number of paths in total */
+
+        /* Each path has two attributes: IP address and group ID */
+        unsigned int *path_ips; /* path IP addresses */
+        unsigned int *path_group_ids;   /* path group IDs (map path to a path group */
+
+        atomic_t current_path;  /* current path index, for per-packet loac balancing */
         struct hlist_node hlist;
-        unsigned int daddr;     //destination IP address (key)
-        unsigned int num_paths; //number of paths in total
-        unsigned int *path_ips; //path IP addresses
-        unsigned int *path_group_ids; //path group IDs, map path entry to a path group
-        atomic_t current_path;  //for per-packet loac balancing
 };
 
+/*
+ * Currently, the path table is only a linked list.
+ * Maybe we can extend it to a hash-table in the future.
+ */
 struct xpath_path_table
 {
-        struct hlist_head *lists;       //linked list
+        struct hlist_head *lists;      
 };
 
 /* Initialize XPath path table */

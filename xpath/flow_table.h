@@ -9,47 +9,47 @@
 
 struct xpath_flow_info
 {
-        u16 path_group_id;      //current path group ID (not path IP address)
-        ktime_t last_tx_time;   //last time when we observe a sent packet
+        u16 path_index; /* index of current path, 0 =< path_index < num_paths */
+        ktime_t last_tx_time;   /* last time when we observe a sent packet */
 
-        u32 seq_prev_path;      //largest seq sent in previous path
-        u32 seq_curr_path;      //largest seq sent in current path
-        u32 ack_seq;    //latest ACK seq number
+        u32 seq_prev_path;      /* largest seq sent in previous path */
+        u32 seq_curr_path;      /* largest seq sent in current path */
+        u32 ack_seq;    /* latest ACK seq number */
 
-        u32 bytes_sent; //bytes sent in current path
-        u32 bytes_acked;        //bytes ACKed in current path
-        u32 bytes_ecn;  //bytes that get ECN marked in current path
-        u16 ecn_fraction;       //ECN fraction in current path
+        u32 bytes_sent; /* bytes sent in current path */
+        u32 bytes_acked;        /* bytes ACKed in current path */
+        u32 bytes_ecn;  /* bytes that get ECN marked in current path */
+        u16 ecn_fraction;       /* ECN fraction in current path */
 
-        u16 rate_mbps;   //sending rate in Mbps
-        u32 bytes_sent_cycle;        //bytes sent in current rate measurement cycle
-        ktime_t cycle_start_time;       //start time of current rate measurement cycle
+        u16 rate_mbps;  /* sending rate in Mbps */
+        u32 bytes_sent_cycle;   /* bytes sent in current rate measurement cycle */
+        ktime_t cycle_start_time;       /* start time of current rate measurement cycle */
 };
 
 /* A TCP flow <local_ip, remote_ip, local_port, remote_port> */
 struct xpath_flow_entry
 {
-        u32 local_ip;   //Local IP address
-        u32 remote_ip;  //Remote IP address
-        u16 local_port; //Local port
-        u16 remote_port;        //Remote port
-        struct xpath_flow_info info;    //Information for this flow
-        struct list_head list;  //linked list
-        spinlock_t lock;        //per-flow lock
+        u32 local_ip;   /* local IP address */
+        u32 remote_ip;  /* remote IP address */
+        u16 local_port; /* local port */
+        u16 remote_port;        /* remote port */
+        struct xpath_flow_info info;    /* flow information */
+        struct list_head list;  /* linked list */
+        spinlock_t lock;        /* per-flow lock */
 };
 
 /* Link List of Flows */
 struct xpath_flow_list
 {
-        struct list_head head_node;    //head node of the flow list
-        unsigned int len;   //total number of flows in the list
-        spinlock_t lock;    //lock for this flow list
+        struct list_head head_node;     /* head node of the flow list */
+        unsigned int len;   /* total number of flows in the list */
+        spinlock_t lock;    /* lock for this flow list */
 };
 
 /* Hash Table of Flows */
 struct xpath_flow_table
 {
-        struct xpath_flow_list *flow_lists;  //array of linked lists
+        struct xpath_flow_list *flow_lists;  /* array of linked lists */
         atomic_t size;
 };
 

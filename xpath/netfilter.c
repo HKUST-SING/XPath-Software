@@ -62,7 +62,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 		payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
 		path_ptr = xpath_search_path_table(&pt, iph->daddr);
 
-                /* cannot find path information */
+                /* no available path */
                 if (unlikely(!path_ptr || path_ptr->num_paths == 0)) {
 			xpath_modify_ip_header(iph, payload_len);
 			return NF_ACCEPT;

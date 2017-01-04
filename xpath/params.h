@@ -21,7 +21,7 @@
 /* Our solution: TLB */
 #define TLB 4
 
-#define NUM_PARAMS 7
+#define NUM_PARAMS 14
 
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;
@@ -29,14 +29,30 @@ extern int xpath_load_balancing;
 extern int xpath_enable_debug;
 /* flowcell threshold in bytes */
 extern int xpath_flowcell_thresh;
-/* TLB ECN fraction threshold */
-extern int xpath_tlb_ecn_fraction;
+/* whether enable reverse ACK prioritization */
+extern int xpath_ack_prio;
+
+/* TLB ECN low fraction threshold */
+extern int xpath_tlb_ecn_low_thresh;
+/* TLB ECN high fraction threshold */
+extern int xpath_tlb_ecn_high_thresh;
+/* TLB RTT low threshold in microsecond */
+extern int xpath_tlb_rtt_low_thresh;
+/* TLB RTT high threshold in microsecond */
+extern int xpath_tlb_rtt_high_thresh;
+/* TLB reroute bytes sent threshold */
+extern int xpath_tlb_reroute_bytes_thresh;
+/* TLB reroute time interval threshold in microsecond */
+extern int xpath_tlb_reroute_time_thresh;
+/* TLB reourte rate threshold in mbps */
+extern int xpath_tlb_reroute_rate_thresh;
+/* TLB reroute probability */
+extern int xpath_tlb_reroute_prob;
 /* TLB ECN sample interval in microsecond */
 extern int xpath_tlb_ecn_sample_us;
 /* TLB ECN minimum sample bytes */
 extern int xpath_tlb_ecn_sample_bytes;
-/* whether enable reverse ACK prioritization */
-extern int xpath_ack_prio;
+
 
 struct xpath_param
 {

@@ -166,13 +166,13 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
  * where_to_route() of tlb load balancing algorithm
  * return desired path index
  */
-//static u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
-//{
-//        u16 i, path_index = current_path_index;
+static u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
+{
+        u16 i, path_index = current_path_index;
 
         /* select a good path */
 
         /* select a gray path */
-//out:
-//        return path_index;
-//}
+out:
+        return path_index;
+}

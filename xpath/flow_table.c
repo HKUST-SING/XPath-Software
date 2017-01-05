@@ -107,7 +107,9 @@ bool xpath_init_flow_info(struct xpath_flow_info *info)
 {
 	if (likely(info)) {
 		info->path_index = 0;
+		info->num_flowlet = 0;
 		info->last_tx_time = ktime_set(0, 0);
+		info->last_reroute_time = ktime_set(0, 0);
 
 		info->seq_prev_path = 0;
 		info->seq_curr_path = 0;

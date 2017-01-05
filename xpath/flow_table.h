@@ -10,7 +10,9 @@
 struct xpath_flow_info
 {
         u16 path_index; /* index of current path, 0 =< path_index < num_paths */
-        ktime_t last_tx_time;   /* last time when we observe a sent packet */
+        u16 num_flowlet;        /* # of flowlets in this connection */
+        ktime_t last_tx_time;   /* last time when we observe a transmitted packet */
+        ktime_t last_reroute_time;      /* last time when we change the path */
 
         u32 seq_prev_path;      /* largest seq sent in previous path */
         u32 seq_curr_path;      /* largest seq sent in current path */

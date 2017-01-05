@@ -5,10 +5,11 @@
 
 int xpath_load_balancing = ECMP;
 int xpath_enable_debug = 0;
-int xpath_flowcell_thresh = 65536;
+int xpath_flowcell_thresh = 65536;	//64KB
+int xpath_flowlet_thresh = 500;	//500us
 int xpath_ack_prio = 1;	//enable ACK prioritization by default
 
-int xpath_tlb_ecn_low_thresh = 102;	//20%
+int xpath_tlb_ecn_low_thresh = 102;	//10%
 int xpath_tlb_ecn_high_thresh = 512;	//50%
 int xpath_tlb_rtt_low_thresh = 200;	//200us
 int xpath_tlb_rtt_high_thresh = 800;	//800us
@@ -24,6 +25,7 @@ int xpath_params_min[NUM_PARAMS] =
 	ECMP,	//load balancing
 	0,	//enable debug
 	0,	//flowcell threshold in byte
+	0,	//flowlet threshold in microsecond
 	0,	//enable ACK prioritization
 	0,	//ECN fraction low threshold
 	0,	//ECN fraction high threshold
@@ -42,6 +44,7 @@ int xpath_params_max[NUM_PARAMS] =
 	TLB,	//load balancing
 	1,	//enable debug
 	104857600,	//flowcell threshold in byte (max: 100MB)
+	5000,	//flowlet threshold in microsecond (max: 5ms)
 	1,	//enable ACK prioritization
 	1024,	//ECN fraction low threshold
 	1024,	//ECN fraction high threshold
@@ -60,6 +63,7 @@ struct xpath_param xpath_params[NUM_PARAMS] =
 	{"load_balancing", &xpath_load_balancing},
 	{"enable_debug", &xpath_enable_debug},
 	{"flowcell_thresh", &xpath_flowcell_thresh},
+	{"flowlet_thresh", &xpath_flowlet_thresh},
 	{"ack_prio", &xpath_ack_prio},
 	{"tlb_ecn_low_thresh", &xpath_tlb_ecn_low_thresh},
 	{"tlb_ecn_high_thresh", &xpath_tlb_ecn_high_thresh},

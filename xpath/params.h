@@ -21,7 +21,7 @@
 /* Our solution: TLB */
 #define TLB 4
 
-#define NUM_PARAMS 14
+#define NUM_PARAMS 15
 
 /* what load balancing machanism does XPath performs */
 extern int xpath_load_balancing;
@@ -29,6 +29,8 @@ extern int xpath_load_balancing;
 extern int xpath_enable_debug;
 /* flowcell threshold in bytes */
 extern int xpath_flowcell_thresh;
+/* flowlet threshold in microsecond */
+extern int xpath_flowlet_thresh;
 /* whether enable reverse ACK prioritization */
 extern int xpath_ack_prio;
 

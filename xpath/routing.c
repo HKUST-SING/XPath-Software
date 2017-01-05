@@ -91,13 +91,7 @@ u32 presto_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 u32 rps_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
         u32 path_index = (u32)atomic_inc_return(&path_ptr->current_path);
-
-	if (likely(path_ptr->num_paths > 0)) {
-        	path_index = path_index % path_ptr->num_paths;
-	} else {
-		path_index = 0;
-	}
-
+	path_index = path_index % path_ptr->num_paths;
         /* Get path IP based on path index */
         return path_ptr->path_ips[path_index];
 }
@@ -114,7 +108,7 @@ u32 flowbender_routing(const struct sk_buff *skb, struct xpath_path_entry *path_
         /* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
         u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 
-        if (likely(ca && path_ptr->num_paths > 0)) {
+        if (likely(ca)) {
                 path_index = (path_index + ca->reroute) % path_ptr->num_paths;
                 if (xpath_enable_debug)
                         printk(KERN_INFO "Reroute %hu\n", ca->reroute);
@@ -135,6 +129,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 					     iph->daddr,
 					     tcph->source,
 					     tcph->dest);
+
 	/* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
 	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
@@ -145,6 +140,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 
 	if (tcph->syn) {
 		f.info.last_tx_time = now;
+		f.info.last_reroute_time = now;
                 /* insert a new flow entry to the flow table */
                 if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
                         if (xpath_enable_debug)
@@ -156,10 +152,36 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
                                 printk(KERN_INFO "XPath: delete flow fails\n");
 		}
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
+		/* idenfity a flowlet and reroute*/
+		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) >
+		    xpath_flowlet_thresh) {
+			path_index = flow_ptr->info.path_index;
+			if (++path_index >= path_ptr->num_paths)
+				path_index = 0;
+			flow_ptr->info.path_index = path_index;
+			flow_ptr->info.num_flowlet++;
+			flow_ptr->info.last_reroute_time = now;
+			flow_ptr->info.bytes_sent = skb->len;
+		} else {
+			flow_ptr->info.bytes_sent += skb->len;
+		}
+		flow_ptr->info.last_tx_time = now;
 	}
 
 	/* Get path IP based on path index */
 	return path_ptr->path_ips[path_index];
+}
+
+static inline bool is_good_path_group(struct xpath_group_entry group)
+{
+	return group.ecn_fraction < xpath_tlb_ecn_low_thresh &&
+	       group.smooth_rtt_us < xpath_tlb_rtt_low_thresh;
+}
+
+static inline bool is_gray_path_group(struct xpath_group_entry group)
+{
+	return  group.ecn_fraction < xpath_tlb_ecn_low_thresh ||
+	        group.smooth_rtt_us < xpath_tlb_rtt_low_thresh;
 }
 
 /*
@@ -168,11 +190,36 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
  */
 static u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
 {
-        u16 i, path_index = current_path_index;
+	u16 i, path_index = current_path_index;
+	unsigned int path_group_id;
+	u16 min_rate_mbps = 65535;	/* maximum value = 2^16 - 1 */
 
-        /* select a good path */
+	/* select a good path with the smallest sending rate */
+	for (i = 0; i < path_ptr->num_paths; i++) {
+		path_group_id = path_ptr->path_group_ids[i];
+		if (path_group_id < XPATH_PATH_GROUP_SIZE &&
+		    is_good_path_group(pg[path_group_id]) &&
+	    	    pg[path_group_id].rate_mbps < min_rate_mbps) {
+                	path_index = i;
+			min_rate_mbps = pg[path_group_id].rate_mbps;
+		}
+	}
 
-        /* select a gray path */
+	/* if a good path exists */
+	if (path_index != current_path_index)
+		goto out;
+
+	/* select a gray path with the smallest sending rate */
+	for (i = 0; i < path_ptr->num_paths; i++) {
+		path_group_id = path_ptr->path_group_ids[i];
+		if (path_group_id < XPATH_PATH_GROUP_SIZE &&
+		    is_gray_path_group(pg[path_group_id]) &&
+	    	    pg[path_group_id].rate_mbps < min_rate_mbps) {
+                	path_index = i;
+			min_rate_mbps = pg[path_group_id].rate_mbps;
+		}
+	}
+
 out:
         return path_index;
 }

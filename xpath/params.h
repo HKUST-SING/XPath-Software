@@ -18,8 +18,10 @@
 #define RPS 2
 /* FlowBender load balancing */
 #define FLOWBENDER 3
+/* LetFlow (NSDI'17) */
+#define LETFLOW 4
 /* Our solution: TLB */
-#define TLB 4
+#define TLB 5
 
 #define NUM_PARAMS 15
 

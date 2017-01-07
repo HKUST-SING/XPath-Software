@@ -64,12 +64,10 @@ u32 presto_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
         f.info.path_index = path_index;
 
         if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
-                if (xpath_enable_debug)
-                        printk(KERN_INFO "XPath: insert flow fails\n");
+		xpath_debug_info("XPath: insert flow fails\n");
 
         } else if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
-                if (xpath_enable_debug)
-                        printk(KERN_INFO "XPath: delete flow fails\n");
+		xpath_debug_info("XPath: delete flow fails\n");
 
         } else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
                 path_index = flow_ptr->info.path_index;
@@ -136,24 +134,21 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
 	f.info.path_index = path_index;
+	f.info.last_tx_time = now;
 
-	if (tcph->syn) {
-		f.info.last_tx_time = now;
-		/* insert a new flow entry to the flow table */
-		if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
-                	if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: insert flow fails\n");
-                }
-	} else if (tcph->fin || tcph->rst) {
-		if (!xpath_delete_flow_table(&ft, &f)) {
-                	if (xpath_enable_debug)
-                        	printk(KERN_INFO "XPath: delete flow fails\n");
-		}
+	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
+		xpath_debug_info("XPath: insert flow fails\n");
+
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
-		/* idenfity a flowlet and reroute*/
-		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) >
-		    xpath_flowlet_thresh) {
-			path_index = flow_ptr->info.path_index;
+		path_index = flow_ptr->info.path_index;
+		/* delete the flow entry */
+		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
+			xpath_debug_info("XPath: delete flow fails\n");
+			goto out;
+		}
+		/* flowlet */
+		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time))
+		    > xpath_flowlet_thresh) {
 			if (++path_index >= path_ptr->num_paths)
 				path_index = 0;
 			flow_ptr->info.path_index = path_index;
@@ -162,62 +157,14 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 		flow_ptr->info.last_tx_time = now;
 	}
 
+out:
 	/* Get path IP based on path index */
 	return path_ptr->path_ips[path_index];
 }
 
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-	unsigned long tmp;
-	ktime_t now = ktime_get();
-	struct iphdr *iph = ip_hdr(skb);
-	struct tcphdr *tcph = tcp_hdr(skb);
-	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
-	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
-					     iph->daddr,
-					     tcph->source,
-					     tcph->dest);
-
-	/* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
-	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
-	struct xpath_flow_entry f, *flow_ptr = NULL;
-
-	xpath_init_flow_entry(&f);
-	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-	f.info.path_index = path_index;
-
-	if (tcph->syn) {
-		f.info.last_tx_time = now;
-		f.info.last_reroute_time = now;
-                /* insert a new flow entry to the flow table */
-                if (unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
-                        if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: insert flow fails\n");
-                }
-	} else if (tcph->fin || tcph->rst) {
-		if (!xpath_delete_flow_table(&ft, &f)) {
-                        if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: delete flow fails\n");
-		}
-	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
-		/* idenfity a flowlet and reroute*/
-		if (ktime_to_us(ktime_sub(now, flow_ptr->info.last_tx_time)) >
-		    xpath_flowlet_thresh) {
-			path_index = flow_ptr->info.path_index;
-			if (++path_index >= path_ptr->num_paths)
-				path_index = 0;
-			flow_ptr->info.path_index = path_index;
-			flow_ptr->info.num_flowlet++;
-			flow_ptr->info.last_reroute_time = now;
-			flow_ptr->info.bytes_sent = skb->len;
-		} else {
-			flow_ptr->info.bytes_sent += skb->len;
-		}
-		flow_ptr->info.last_tx_time = now;
-	}
-
-	/* Get path IP based on path index */
-	return path_ptr->path_ips[path_index];
+	return letflow_routing(skb, path_ptr);
 }
 
 static inline bool is_good_path_group(struct xpath_group_entry group)

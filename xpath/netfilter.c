@@ -71,9 +71,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
                 /* Reduce MSS value in SYN packets */
                 if (tcph->syn &&
                     unlikely(!xpath_reduce_tcp_mss(skb, sizeof(struct iphdr)))) {
-                        if (xpath_enable_debug)
-                                printk(KERN_INFO "XPath: cannot modify MSS\n");
-
+                        xpath_debug_info("XPath: cannot modify MSS\n");
                         return NF_DROP;
                 }
 
@@ -124,8 +122,7 @@ static unsigned int xpath_hook_func_out(const struct nf_hook_ops *ops,
 
                 /* add tunnel (outer) IP header */
 		if (unlikely(!xpath_ipip_encap(skb, &tiph, out))) {
-			if (xpath_enable_debug)
-                        	printk(KERN_INFO "XPath: cannot add IP header\n");
+                        xpath_debug_info("XPath: cannot add IP header\n");
 			return NF_DROP;
 		}
 	}

@@ -87,6 +87,12 @@ struct ctl_path xapath_params_path[] =
 
 struct ctl_table_header *xpath_sysctl = NULL;
 
+inline void xpath_debug_info(char *str)
+{
+	if (str && xpath_enable_debug)
+		printk(KERN_INFO "%s", str);
+}
+
 bool xpath_params_init(void)
 {
 	int i;

@@ -66,6 +66,8 @@ struct xpath_param
 
 extern struct xpath_param xpath_params[NUM_PARAMS];
 
+/* Print debug information if necessary */
+inline void xpath_debug_info(char *str);
 /* Intialize parameters and register sysctl. Return true if it succeeds. */
 bool xpath_params_init(void);
 /* Unregister sysctl */

@@ -5,10 +5,18 @@
 #define XPATH_FLOW_HASH_RANGE 256
 /* Hash range for XPath path table */
 #define XPATH_PATH_HASH_RANGE 256
-
+/* Number of path groups */
 #define XPATH_PATH_GROUP_SIZE 16
 
+/* DSCP value for high priority queue */
 #define HIGH_PRIO_DSCP 1
+
+/*
+ * Length to Time (l2t) in nanosecond (ns)
+ * Line Rate = 1 Gbit per second.
+ * time_ns = len * 8 / 1G * 10^9 = = len * 8 = len << 3
+ */
+#define xpath_l2t_ns(pktlen) (pktlen << 3)
 
 /* flow-level ECMP load balancing */
 #define ECMP 0

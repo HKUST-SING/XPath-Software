@@ -119,6 +119,8 @@ u32 flowbender_routing(const struct sk_buff *skb, struct xpath_path_entry *path_
 u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
 	ktime_t now = ktime_get();
+	/* When all bits of the packet have been pushed to the link */
+	ktime_t pkt_tx_time = ktime_add_ns(now, xpath_l2t_ns(skb->len));
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
 	//u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
@@ -134,7 +136,7 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
 	f.info.path_index = path_index;
-	f.info.last_tx_time = now;
+	f.info.last_tx_time = pkt_tx_time;
 
 	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
 		xpath_debug_info("XPath: insert flow fails\n");
@@ -154,7 +156,7 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 			flow_ptr->info.path_index = path_index;
 			flow_ptr->info.num_flowlet++;
 		}
-		flow_ptr->info.last_tx_time = now;
+		flow_ptr->info.last_tx_time = pkt_tx_time;
 	}
 
 out:

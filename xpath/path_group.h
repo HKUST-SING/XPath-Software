@@ -10,7 +10,7 @@ struct xpath_group_entry {
         u16 ecn_fraction;       //ECN fraction of all flows (maximum 1024)
         u32 bytes_acked;        //bytes ACKed in this path group
         u32 bytes_ecn;  //bytes get ECN marked in this path group
-        ktime_t last_ecn_update_time;   //last time when we update ECN statistic
+        ktime_t last_ecn_update_time;   //last time when we update ecn_fraction
 
         /* RTT information */
         u16 smooth_rtt_us;      //smooth RTT in microsecond of this path group
@@ -19,7 +19,7 @@ struct xpath_group_entry {
         /* sending rate information */
         u32 bytes_sent; //bytes sent in this path group
         u16 rate_mbps;  //sending rate in Mbps
-        ktime_t last_rate_update_time;   //last time when we update rate information
+        ktime_t last_rate_update_time;   //last time when we update rate_mbps
 
         spinlock_t lock;
 };

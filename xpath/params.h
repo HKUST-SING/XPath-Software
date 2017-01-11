@@ -18,6 +18,10 @@
  */
 #define xpath_l2t_ns(pktlen) (pktlen << 3)
 
+/* borrow from codel_time_after in include/net/codel.h of Linux kernel */
+#define seq_after(a, b) (typecheck(u32, a) && typecheck(u32, b) && ((s32)((a) - (b)) > 0))
+#define seq_after_eq(a, b) (typecheck(u32, a) && typecheck(u32, b) && ((s32)((a) - (b)) >= 0))
+
 /* flow-level ECMP load balancing */
 #define ECMP 0
 /* flowcell-level Presto load balancing */

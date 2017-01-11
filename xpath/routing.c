@@ -164,9 +164,100 @@ out:
 	return path_ptr->path_ips[path_index];
 }
 
+/* generate a random number in [0, range). range <= 255 */
+static inline u8 random_number(u8 range)
+{
+	u8 result = 0;
+
+	if (unlikely(range == 0))
+		goto out;
+
+	get_random_bytes(&result, sizeof(result));
+	while (result >= range)
+		result -= range;
+
+out:
+	return result;
+}
+
 u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 {
-	return letflow_routing(skb, path_ptr);
+	const struct tcp_sock *tp = tcp_sk(skb->sk);
+	bool reroute = false;
+	ktime_t now = ktime_get();
+	/* When all bits of the packet have been pushed to the link */
+	ktime_t pkt_tx_time = ktime_add_ns(now, xpath_l2t_ns(skb->len));
+	struct iphdr *iph = ip_hdr(skb);
+	struct tcphdr *tcph = tcp_hdr(skb);
+	u32 payload_len = ntohs(iph->tot_len) - (iph->ihl << 2) - (tcph->doff << 2);
+	u32 seq = (u32)ntohl(tcph->seq) + (payload_len > 1)? payload_len - 1 : 0;
+	u16 hash_key = xpath_flow_hash_crc16(iph->saddr,
+					     iph->daddr,
+					     tcph->source,
+					     tcph->dest);
+
+	/* hash_key_space = 1 << 16; path_index = hash_key * path_ptr->num_paths / region_size; */
+	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
+	struct xpath_flow_entry f, *flow_ptr = NULL;
+
+	xpath_init_flow_entry(&f);
+	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
+	f.info.path_index = path_index;
+	f.info.last_tx_time = pkt_tx_time;
+
+	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
+		xpath_debug_info("XPath: insert flow fails\n");
+
+	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
+		path_index = flow_ptr->info.path_index;
+		/* delete the flow entry */
+		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
+			xpath_debug_info("XPath: delete flow fails\n");
+			goto out;
+		}
+		/* reroute when we observe a flowlet */
+		if (now.tv64 - flow_ptr->info.last_tx_time.tv64 > 1000 *
+		    xpath_flowlet_thresh) {
+			flow_ptr->info.num_flowlet++;
+			reroute = true;
+		}
+
+		/* reroute when current path is highly congested */
+		if (!reroute &&
+		    flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
+		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
+	            flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
+		    now.tv64 - flow_ptr->info.last_reroute_time.tv64 > 1000 *
+		    xpath_tlb_reroute_time_thresh &&
+		    random_number(100) < xpath_tlb_reroute_prob) {
+			reroute = true;
+		}
+
+		/* we don't reroute the flow */
+		if (!reroute) {
+			flow_ptr->info.last_tx_time = pkt_tx_time;
+			if (seq_after(seq, flow_ptr->info.seq_curr_path))
+				flow_ptr->info.seq_curr_path = seq;
+			flow_ptr->info.bytes_sent += payload_len;
+			goto out;
+		}
+
+		/* path_index = (path_index + 1) % path_ptr->num_paths */
+		if (++path_index >= path_ptr->num_paths)
+			path_index = 0;
+
+		/* update per-flow state after reroute */
+		flow_ptr->info.path_index = path_index;
+		flow_ptr->info.last_tx_time = pkt_tx_time;
+		flow_ptr->info.last_reroute_time = now;
+		flow_ptr->info.seq_prev_path = flow_ptr->info.seq_curr_path;
+		flow_ptr->info.seq_curr_path = seq;
+		flow_ptr->info.bytes_sent = payload_len;
+	}
+
+out:
+	/* Get path IP based on path index */
+	return path_ptr->path_ips[path_index];
 }
 
 static inline bool is_good_path_group(struct xpath_group_entry group)

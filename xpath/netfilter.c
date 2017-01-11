@@ -14,9 +14,6 @@
 #include "net_util.h"
 #include "params.h"
 
-/* borrow from codel_time_after in include/net/codel.h of Linux kernel */
-#define seq_after(a, b) (typecheck(u32, a) && typecheck(u32, b) && ((s32)((a) - (b)) > 0))
-
 /* Flow Table */
 extern struct xpath_flow_table ft;
 /* Path Table */
@@ -140,7 +137,9 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = NULL;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
-	u32 bytes_acked;
+        struct xpath_path_entry *path_ptr = NULL;
+	u32 ack_seq, prev_ack_seq, bytes_acked, bytes_ecn, sample_fraction;
+        unsigned int path_group_id;
 	unsigned long tmp;
 
 	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
@@ -154,32 +153,68 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
 		goto out;
 	}
 
-	/* if we perform TLB load balancing, we need to update states in RX path */
+	/* Only TLB needs to update some states in RX path */
 	if (xpath_load_balancing != TLB)
 		goto out;
 
 	/* after decap outer IP header, we need to get the inner IP header */
 	iph = ip_hdr(skb);
-
 	/* we only handle TCP ACK packets */
 	if (iph->protocol != IPPROTO_TCP || !(tcph = tcp_hdr(skb)) || !(tcph->ack))
 		goto out;
 
-	/* Note that in reverse direction, local = destion, remote = source */
+	/* Note that the packet is from the reverse direction */
 	xpath_set_flow_4tuple(&f, iph->daddr, iph->saddr, ntohs(tcph->dest), ntohs(tcph->source));
-	flow_ptr = xpath_search_flow_table(&ft, &f);
-	if (unlikely(!flow_ptr))
+	if (unlikely(!(flow_ptr = xpath_search_flow_table(&ft, &f))))
 		goto out;
 
 	/* initialize ACK Seq */
-	if (unlikely(flow_ptr->info.ack_seq == 0))
-		flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+	if (unlikely(flow_ptr->info.ack_seq == 0)) {
+                flow_ptr->info.ack_seq = ntohl(tcph->ack_seq);
+                goto out;
+        }
 
-	if (unlikely(!seq_after(ntohl(tcph->ack_seq), flow_ptr->info.ack_seq)))
+        ack_seq = ntohl(tcph->ack_seq);
+        /* It should be an effective ACK */
+	if (unlikely(!seq_after(ack_seq, flow_ptr->info.ack_seq)))
 		goto out;
 
-	/* get ACK data in bytes */
-	bytes_acked = ntohl(tcph->ack_seq) - flow_ptr->info.ack_seq;
+        prev_ack_seq = flow_ptr->info.ack_seq;
+        flow_ptr->info.ack_seq = ack_seq;
+
+        /* we need to ensure that all bytes ACKed are sent in current path */
+        if (!seq_after_eq(prev_ack_seq, flow_ptr->info.seq_prev_path))
+                goto out;
+
+        bytes_acked = ack_seq - prev_ack_seq;
+        bytes_ecn = (tcph->ece) ? bytes_acked : 0;
+        flow_ptr->info.bytes_acked += bytes_acked;
+        flow_ptr->info.bytes_ecn += bytes_ecn;
+        /* calculate per-flow ECN fraction */
+        if (flow_ptr->info.bytes_acked > xpath_tlb_ecn_sample_bytes) {
+                /* sample fraction <= 1024 */
+                sample_fraction = flow_ptr->info.bytes_ecn << 10 /
+                                  flow_ptr->info.bytes_acked;
+                /* smooth = smooth * 0.25 + sample * 0.75 */
+                flow_ptr->info.ecn_fraction = (flow_ptr->info.ecn_fraction +
+                                               sample_fraction * 3) >> 2;
+                flow_ptr->info.bytes_acked = 0;
+                flow_ptr->info.bytes_ecn = 0;
+        }
+
+        if (!(path_ptr = xpath_search_path_table(&pt, iph->saddr)))
+                goto out;
+
+        if (unlikely(flow_ptr->info.path_index >= path_ptr->num_paths))
+                goto out;
+
+        path_group_id = path_ptr->path_group_ids[flow_ptr->info.path_index];
+        if (unlikely(path_group_id >= XPATH_PATH_GROUP_SIZE))
+                goto out;
+
+        /* update per-path-group state */
+        pg[path_group_id].bytes_acked += bytes_acked;
+        pg[path_group_id].bytes_ecn += bytes_ecn;
 
 out:
         return NF_ACCEPT;

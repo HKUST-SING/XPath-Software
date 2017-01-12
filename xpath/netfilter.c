@@ -134,13 +134,14 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
                                        const struct net_device *out,
                                        int (*okfn)(struct sk_buff *))
 {
+        ktime_t now = ktime_get();
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = NULL;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
         struct xpath_path_entry *path_ptr = NULL;
 	u32 ack_seq, prev_ack_seq, bytes_acked, bytes_ecn, sample_fraction;
         unsigned int path_group_id;
-	unsigned long tmp;
+	unsigned long flags;
 
 	if (likely(in) && param_dev && strncmp(in->name, param_dev, IFNAMSIZ) != 0)
                 goto out;
@@ -212,9 +213,40 @@ static unsigned int xpath_hook_func_in(const struct nf_hook_ops *ops,
         if (unlikely(path_group_id >= XPATH_PATH_GROUP_SIZE))
                 goto out;
 
-        /* update per-path-group state */
+        /* reset per-path-group state if long time no update */
+        if (now.tv64 - pg[path_group_id].last_update_time.tv64 > 1000 *
+            (s64)xpath_tlb_ecn_sample_us) {
+                spin_lock_irqsave(&(pg[path_group_id].lock), flags);
+                pg[path_group_id].last_update_time = now;
+                pg[path_group_id].ecn_fraction = 0;
+                pg[path_group_id].bytes_acked = bytes_acked;
+                pg[path_group_id].bytes_ecn = bytes_ecn;
+                pg[path_group_id].last_ecn_update_time = now;
+                spin_unlock_irqrestore(&(pg[path_group_id].lock), flags);
+                goto out;
+        }
+
+        spin_lock_irqsave(&(pg[path_group_id].lock), flags);
+        pg[path_group_id].last_update_time = now;
         pg[path_group_id].bytes_acked += bytes_acked;
         pg[path_group_id].bytes_ecn += bytes_ecn;
+
+        /* our measurement cycle is large enough */
+        if (pg[path_group_id].bytes_acked > xpath_tlb_ecn_sample_bytes &&
+            now.tv64 - pg[path_group_id].last_ecn_update_time.tv64 > 1000 *
+            (s64)xpath_tlb_ecn_sample_us) {
+                /* sample fraction <= 1024 */
+                sample_fraction = pg[path_group_id].bytes_ecn << 10 /
+                                  pg[path_group_id].bytes_acked;
+                /* smooth = smooth * 0.25 + sample * 0.75 */
+                pg[path_group_id].ecn_fraction = (pg[path_group_id].ecn_fraction +
+                                                  3 * sample_fraction) >> 2;
+                pg[path_group_id].bytes_acked = 0;
+                pg[path_group_id].bytes_ecn = 0;
+                pg[path_group_id].last_ecn_update_time = now;
+        }
+
+        spin_unlock_irqrestore(&(pg[path_group_id].lock), flags);
 
 out:
         return NF_ACCEPT;

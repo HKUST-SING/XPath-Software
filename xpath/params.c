@@ -6,7 +6,7 @@
 int xpath_load_balancing = ECMP;
 int xpath_enable_debug = 0;
 int xpath_flowcell_thresh = 65536;	//64KB
-int xpath_flowlet_thresh = 1000;	//1000us
+int xpath_flowlet_thresh = 800;	//800us
 int xpath_ack_prio = 1;	//enable ACK prioritization by default
 
 int xpath_tlb_ecn_low_thresh = 102;	//10%

@@ -8,6 +8,8 @@ bool xpath_init_path_group(struct xpath_group_entry *pg, unsigned int size)
                 return false;
 
         for (i = 0; i < size; i++) {
+                pg[i].last_update_time = ktime_set(0, 0);
+
                 pg[i].ecn_fraction = 0;
                 pg[i].bytes_acked = 0;
                 pg[i].bytes_ecn = 0;

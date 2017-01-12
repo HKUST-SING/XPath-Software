@@ -6,6 +6,8 @@
 
 /* A path group consists of multiple paths from the same server to the same ToR switch */
 struct xpath_group_entry {
+        ktime_t last_update_time;       //last time when we update any state
+
         /* ECN information */
         u16 ecn_fraction;       //ECN fraction of all flows (maximum 1024)
         u32 bytes_acked;        //bytes ACKed in this path group

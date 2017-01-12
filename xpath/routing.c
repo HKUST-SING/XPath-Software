@@ -204,6 +204,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
 	f.info.path_index = path_index;
 	f.info.last_tx_time = pkt_tx_time;
+	f.info.last_reroute_time = now;
 
 	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
 		xpath_debug_info("XPath: insert flow fails\n");
@@ -215,16 +216,9 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			xpath_debug_info("XPath: delete flow fails\n");
 			goto out;
 		}
-		/* reroute when we observe a flowlet */
-		if (now.tv64 - flow_ptr->info.last_tx_time.tv64 > 1000 *
-		    xpath_flowlet_thresh) {
-			flow_ptr->info.num_flowlet++;
-			reroute = true;
-		}
 
 		/* reroute when current path is highly congested */
-		if (!reroute &&
-		    flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
+		if (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
 		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
 	            flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
 		    now.tv64 - flow_ptr->info.last_reroute_time.tv64 > 1000 *
@@ -233,8 +227,12 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			reroute = true;
 		}
 
-		/* we don't reroute the flow */
-		if (!reroute) {
+		/* find a path to reroute */
+		if (reroute)
+			path_index = tlb_where_to_route(path_index, path_ptr);
+
+		/* not reroute or cannot find a better path */
+		if (!reroute || path_index == flow_ptr->info.path_index) {
 			flow_ptr->info.last_tx_time = pkt_tx_time;
 			if (seq_after(seq, flow_ptr->info.seq_curr_path))
 				flow_ptr->info.seq_curr_path = seq;
@@ -242,11 +240,7 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			goto out;
 		}
 
-		/* path_index = (path_index + 1) % path_ptr->num_paths */
-		if (++path_index >= path_ptr->num_paths)
-			path_index = 0;
-
-		/* update per-flow state after reroute */
+		/* update per-flow state for reroute */
 		flow_ptr->info.path_index = path_index;
 		flow_ptr->info.last_tx_time = pkt_tx_time;
 		flow_ptr->info.last_reroute_time = now;
@@ -260,54 +254,55 @@ out:
 	return path_ptr->path_ips[path_index];
 }
 
-static inline bool is_good_path_group(struct xpath_group_entry group)
+inline bool is_good_path_group(struct xpath_group_entry group)
 {
-	return group.ecn_fraction < xpath_tlb_ecn_low_thresh &&
-	       group.smooth_rtt_us < xpath_tlb_rtt_low_thresh;
+	return group.ecn_fraction < xpath_tlb_ecn_low_thresh;
 }
 
-static inline bool is_gray_path_group(struct xpath_group_entry group)
+inline bool is_gray_path_group(struct xpath_group_entry group)
 {
-	return  group.ecn_fraction < xpath_tlb_ecn_low_thresh ||
-	        group.smooth_rtt_us < xpath_tlb_rtt_low_thresh;
+	return  group.ecn_fraction >= xpath_tlb_ecn_low_thresh &&
+		group.ecn_fraction < xpath_tlb_ecn_high_thresh;
 }
 
 /*
  * where_to_route() of tlb load balancing algorithm
  * return desired path index
  */
-static u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
+u16 tlb_where_to_route(u16 current_path_index, struct xpath_path_entry *path_ptr)
 {
 	u16 i, path_index = current_path_index;
 	unsigned int path_group_id;
-	u16 min_rate_mbps = 65535;	/* maximum value = 2^16 - 1 */
+	struct xpath_group_entry current_path = pg[path_ptr->path_group_ids[path_index]];
 
-	/* select a good path with the smallest sending rate */
-	for (i = 0; i < path_ptr->num_paths; i++) {
-		path_group_id = path_ptr->path_group_ids[i];
-		if (path_group_id < XPATH_PATH_GROUP_SIZE &&
+	/* randomly select a good path */
+	for (i = 0; i < path_ptr->num_paths - 1; i++) {
+		while (++path_index >= path_ptr->num_paths)
+			path_index -= path_ptr->num_paths;
+
+		path_group_id = path_ptr->path_group_ids[path_index];
+		if (likely(path_group_id < XPATH_PATH_GROUP_SIZE) &&
 		    is_good_path_group(pg[path_group_id]) &&
-	    	    pg[path_group_id].rate_mbps < min_rate_mbps) {
-                	path_index = i;
-			min_rate_mbps = pg[path_group_id].rate_mbps;
+	    	    pg[path_group_id].ecn_fraction < current_path.ecn_fraction) {
+			goto out;
 		}
 	}
 
-	/* if a good path exists */
-	if (path_index != current_path_index)
-		goto out;
+	/* randomly select a gray path */
+	path_index = current_path_index;
+	for (i = 0; i < path_ptr->num_paths - 1; i++) {
+		while (++path_index >= path_ptr->num_paths)
+			path_index -= path_ptr->num_paths;
 
-	/* select a gray path with the smallest sending rate */
-	for (i = 0; i < path_ptr->num_paths; i++) {
-		path_group_id = path_ptr->path_group_ids[i];
-		if (path_group_id < XPATH_PATH_GROUP_SIZE &&
+		path_group_id = path_ptr->path_group_ids[path_index];
+		if (likely(path_group_id < XPATH_PATH_GROUP_SIZE) &&
 		    is_gray_path_group(pg[path_group_id]) &&
-	    	    pg[path_group_id].rate_mbps < min_rate_mbps) {
-                	path_index = i;
-			min_rate_mbps = pg[path_group_id].rate_mbps;
+	            pg[path_group_id].ecn_fraction < current_path.ecn_fraction) {
+			goto out;
 		}
 	}
 
+	path_index = current_path_index;
 out:
         return path_index;
 }

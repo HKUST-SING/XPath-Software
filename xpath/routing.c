@@ -200,16 +200,21 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	u32 path_index = ((unsigned long long)hash_key * path_ptr->num_paths) >> 16;
 	struct xpath_flow_entry f, *flow_ptr = NULL;
 
+    bool bad_path_triggle = false;
+    bool flowlet_triggle = false;
+
 	xpath_init_flow_entry(&f);
 	xpath_set_flow_4tuple(&f, iph->saddr, iph->daddr, ntohs(tcph->source), ntohs(tcph->dest));
-	f.info.path_index = path_index;
+	f.info.path_index = path_index; // Initial path index
 	f.info.last_tx_time = pkt_tx_time;
 	f.info.last_reroute_time = now;
 
 	if (tcph->syn && unlikely(!xpath_insert_flow_table(&ft, &f, GFP_ATOMIC))) {
 		xpath_debug_info("XPath: insert flow fails\n");
+        goto out;
+    }
 
-	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
+    if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
 		/* delete the flow entry */
 		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
@@ -217,10 +222,15 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 			goto out;
 		}
 
+        bad_path_triggle = (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
+		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh);
+
+        flowlet_triggle = ktime_to_us (ktime_sub (now, flow_ptr->info.last_tx_time))
+		    > xpath_flowlet_thresh
+
 		/* reroute when current path is highly congested */
-		if (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
-		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
-	            flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
+        if ((bad_path_triggle || flowlet_triggle) && // TLB has both bad path trigger and flowlet trigger
+            flow_ptr->info.bytes_sent >= xpath_tlb_reroute_bytes_thresh &&
 		    now.tv64 - flow_ptr->info.last_reroute_time.tv64 > 1000 *
 		    xpath_tlb_reroute_time_thresh &&
 		    random_number(100) < xpath_tlb_reroute_prob) {

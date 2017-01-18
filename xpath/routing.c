@@ -144,8 +144,8 @@ u32 letflow_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
 		/* delete the flow entry */
-		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
-			xpath_debug_info("XPath: delete flow fails\n");
+		if (tcph->fin || tcph->rst) {
+			xpath_delete_flow_table(&ft, &f);
 			goto out;
 		}
 		/* flowlet */
@@ -212,11 +212,11 @@ u32 tlb_routing(const struct sk_buff *skb, struct xpath_path_entry *path_ptr)
 	} else if (likely(flow_ptr = xpath_search_flow_table(&ft, &f))) {
 		path_index = flow_ptr->info.path_index;
 		/* delete the flow entry */
-		if ((tcph->fin || tcph->rst) && !xpath_delete_flow_table(&ft, &f)) {
-			xpath_debug_info("XPath: delete flow fails\n");
+		if (tcph->fin || tcph->rst) {
+			xpath_delete_flow_table(&ft, &f);
 			goto out;
 		}
-
+		
 		/* reroute when current path is highly congested */
 		if (flow_ptr->info.ecn_fraction >= xpath_tlb_ecn_high_thresh &&
 		    (tp->srtt_us << 3) >= xpath_tlb_rtt_high_thresh &&
